@@ -1,0 +1,68 @@
+* {
+  box-sizing: border-box
+}
+
+html, body, #root, .app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden 
+}
+
+/* 顶部导航栏 */
+.header {
+  height: 60px;
+  background-color: #001529;
+  color: white;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 18px;
+  font-weight: bold
+}
+
+/* 核心编辑器区域：左中右布局 */
+.editor-container {
+  display: flex;
+  /* header 60px 剩下的全给编辑器 */
+  height: calc(100% - 60px)
+}
+
+/* 左侧物料区 */
+.material-panel {
+  width: 240px;
+  background: #fff;
+  border-right: 1px solid #ddd;
+  padding: 16px;
+  overflow-y: auto
+}
+
+/* 中间画布区 */
+.canvas-area {
+  flex: 1;
+  background: #f0f2f5;
+  padding: 40px;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start
+}
+
+/* 真正的画布 */
+.canvas-paper {
+  background: white;
+  width: 100%;
+  max-width: 800px;
+  min-height: 800px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative
+}
+
+/* 右侧配置区 */
+.setting-panel {
+  width: 300px;
+  background: #fff;
+  border-left: 1px solid #ddd;
+  padding: 16px;
+  overflow-y: auto
+}

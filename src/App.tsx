@@ -1,23 +1,28 @@
 import { Button, Input } from 'antd';
 import React from 'react';
 import { useAppSelector, useAppDispatch } from './store/hook';
-import type { ComponentSchema } from './types/schema';
-import { setSelectedId, updateComponentProps } from './store/projectSlice';
+import type { ComponentSchema, ComponentType } from './types/schema';
+import { setSelectedId, updateComponentProps, addComponent, deleteComponent } from './store/projectSlice';
+import { DraggableSource } from './editor/materials/DraggableSource';
+import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
+import { v4 as uuid } from 'uuid'
+
 import './App.css';
 
 
-// 1.组件映射表
+// 组件映射表
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ComponentMap: Record<string, React.FC<any>> = {
   Page: ({ children, style }) => <div style={style}>{children}</div>,
   Container: ({ children, style }) => <div style={style}>{children}</div>,
   Button: ({ children, style, ...props }) => <Button style={style} {...props}>{children}</Button>,
-  Input: ({ style, ...props }) => <Input style={style} {...props} />,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  Input: ({ style, children, ...props }) => <Input style={style} {...props} />,
   Text: ({ text, fontSize, color }) => <span style={{ fontSize, color }}>{text}</span>
 };
 
 
-// 2. 递归渲染器
+// 归渲染器
 const RenderComponent: React.FC<{ schema: ComponentSchema }> = ({ schema }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.selectedId);
@@ -54,7 +59,26 @@ const RenderComponent: React.FC<{ schema: ComponentSchema }> = ({ schema }) => {
   );
 };
 
-// 3. 主应用
+// 画布区域组件
+const CanvasArea: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'canvas-root'
+  })
+
+  const style = {
+    minHeight: '100%',
+    border: isOver ? '2px dashed #1890ff' : '1px solid transparent',
+    transition: 'all 0.2s'
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className='canvas-paper'>
+      {children}
+    </div>
+  )
+} 
+
+// 主应用
 function App() {
   const dispatch = useAppDispatch();
   // 从 Redux 读取数据
@@ -76,6 +100,36 @@ function App() {
 
   const selectedComponent = selectedId ? findNode(page.root, selectedId) : null;
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
+    // 如果此时鼠标停留在ID为'canvas-root'的区域（即CanvasArea）
+    if (over && over.id === 'canvas-root') {
+      // 获取拖拽元素携带的数据（在DraggableSource里存的data:{ type }）
+      const type = active.data.current?.type as ComponentType
+
+      if (type) {
+        const newComponent: ComponentSchema = {
+          id: uuid(),
+          type,
+          name: type,
+          props: {},
+          children: []
+        }
+
+        if (type === 'Button') {
+          newComponent.props = { children: '新按钮' }
+        } else if (type === 'Text') {
+          newComponent.props = { text: '默认文本', fontSize: '14px', color: '#000' }
+        } else if (type === 'Input') {
+          newComponent.props = { placeholder: '请输入...' }
+        }
+
+        dispatch(addComponent(newComponent))
+      }
+    }
+  }
+  
   return (
     <div className="app">
       {/* 顶部导航 */}
@@ -84,6 +138,7 @@ function App() {
       </div>
 
       {/* 主体三栏布局 */}
+      <DndContext onDragEnd={handleDragEnd}>
       <div className="editor-container">
         
         {/* 左侧：物料面板 */}
@@ -91,17 +146,23 @@ function App() {
           <h3>组件库</h3>
           <p>这里将展示可拖拽组件</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <Button block>按钮</Button>
-            <Button block>文本</Button>
-            <Button block>输入框</Button>
+            <DraggableSource type="Button">
+              <Button block>按钮</Button>
+            </DraggableSource>
+            <DraggableSource type="Text">
+              <Button block>文本</Button>
+            </DraggableSource>
+            <DraggableSource type="Input">
+              <Button block>输入框</Button>
+            </DraggableSource>
           </div>
         </div>
 
         {/* 中间：画布 */}
         <div className="canvas-area">
-          <div className="canvas-paper">
+          <CanvasArea>
             <RenderComponent schema={page.root} />
-          </div>
+          </CanvasArea>
         </div>
 
         {/* 右侧：属性面板 */}
@@ -116,36 +177,103 @@ function App() {
                 <strong>Type:</strong> {selectedComponent.type}
               </div>
               
-              <strong>Props (JSON编辑):</strong>
-              <textarea
-                style={{ 
-                  width: '100%', 
-                  height: '300px', 
-                  marginTop: '10px',
-                  padding: '8px',
-                  border: '1px solid #d9d9d9',
-                  borderRadius: '4px',
-                  fontFamily: 'monospace'
-                }}
-                // 这里用了 key 技巧：当选中组件切换时，强制重新渲染 textarea
-                // 否则 value 不会变（非受控组件模式下）
-                key={selectedComponent.id}
-                defaultValue={JSON.stringify(selectedComponent.props, null, 2)}
-                onChange={(e) => {
-                  try {
-                    const newProps = JSON.parse(e.target.value);
-                    dispatch(updateComponentProps({ 
-                      id: selectedComponent.id, 
-                      props: newProps 
-                    }));
-                  } catch{
-                    // JSON 格式错误暂时忽略
-                  }
-                }}
-              />
-              <p style={{ fontSize: 12, color: '#999', marginTop: 5 }}>
-                提示：直接修改上面的 JSON 来更新组件属性
-              </p>
+              {/* 根据组件类型展示不同的配置表单 */}
+              {selectedComponent.type === 'Button' && (
+                <div style={{ marginBottom: 10 }}>
+                  <label>按钮文字:</label>
+                  <Input
+                    value={selectedComponent.props.children}
+                    onChange={(e) => {
+                      dispatch(updateComponentProps({
+                        id: selectedComponent.id,
+                        props: {
+                          children: e.target.value
+                        }
+                      }))
+                    }}
+                  />
+                </div>
+              )}
+
+              {selectedComponent.type === 'Text' && (
+                <>
+                  <div style={{ marginBottom: 10 }}>
+                    <label>文本内容：</label>
+                    <Input 
+                      value={selectedComponent.props.text}
+                      onChange={(e) => {
+                        dispatch(updateComponentProps({
+                          id: selectedComponent.id,
+                          props: {
+                            text: e.target.value
+                          }
+                        }))
+                      }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                      <label>颜色：</label>
+                      <Input 
+                        type="color"
+                        value={selectedComponent.props.color} 
+                        onChange={(e) => {
+                          dispatch(updateComponentProps({
+                            id: selectedComponent.id,
+                            props: { color: e.target.value }
+                          }))
+                        }}
+                      />
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                      <label>字体大小：</label>
+                      <Input 
+                        value={selectedComponent.props.fontSize} 
+                        onChange={(e) => {
+                          dispatch(updateComponentProps({
+                            id: selectedComponent.id,
+                            props: { fontSize: e.target.value }
+                          }))
+                        }}
+                      />
+                  </div>
+                </>
+              )}
+
+              {selectedComponent.type === 'Input' && (
+                <div style={{ marginBottom: 10 }}>
+                  <label>占位符：</label>
+                  <Input 
+                    value={selectedComponent.props.placeholder}
+                    onChange={(e) => {
+                      dispatch(updateComponentProps({
+                        id: selectedComponent.id,
+                        props: {
+                          placeholder: e.target.value
+                        }
+                      }))
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ marginTop: 20, borderTop: '1px solid #eee', paddingTop: 10 }}>
+                <strong>调试信息 (Props)</strong>
+                <pre style={{ fontSize: 12, color: '#999' }}>
+                  {JSON.stringify(selectedComponent.props, null, 2)}
+                </pre>
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                <Button
+                  danger
+                  block
+                  onClick={() => {
+                    dispatch(deleteComponent(selectedComponent.id))
+                  }}
+                >
+                  删除组件
+                </Button>
+              </div>
             </div>
           ) : (
             <div style={{ color: '#999', marginTop: 50, textAlign: 'center' }}>
@@ -155,6 +283,7 @@ function App() {
         </div>
 
       </div>
+      </DndContext>
     </div>
   );
 }

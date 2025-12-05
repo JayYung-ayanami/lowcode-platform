@@ -6,7 +6,9 @@ import { setSelectedId, updateComponentProps, addComponent, deleteComponent } fr
 import { DraggableSource } from './editor/materials/DraggableSource';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
 import { v4 as uuid } from 'uuid'
-
+import { Modal } from 'antd'
+import { useState } from 'react'
+import { generatePageCode } from './utils/codegen'
 import './App.css';
 
 
@@ -84,6 +86,8 @@ function App() {
   // 从 Redux 读取数据
   const page = useAppSelector((state) => state.project.page);
   const selectedId = useAppSelector((state) => state.project.selectedId);
+  const [isModalOpen, setIsModalOpen] = useState(false) // 是否打开代码生成弹窗
+  const [code, setCode] = useState('') // 暂存生成的源代码
 
   // 辅助函数：根据 ID 在树中查找组件对象 (为了在右侧回显属性)
   // 实际项目中建议把这个逻辑移到 Redux Selector 中
@@ -129,12 +133,19 @@ function App() {
       }
     }
   }
+
+  const handleSave = () => {
+    const sourceCode = generatePageCode(page)
+    setCode(sourceCode)
+    setIsModalOpen(true)
+  }
   
   return (
     <div className="app">
       {/* 顶部导航 */}
-      <div className="header">
-        LowCode Engine
+      <div className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' }}>
+        <div>LowCode Engine</div>
+        <Button type="primary" onClick={handleSave}>生成代码</Button>
       </div>
 
       {/* 主体三栏布局 */}
@@ -284,6 +295,17 @@ function App() {
 
       </div>
       </DndContext>
+      <Modal
+        title="生成的源代码"
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width={800}
+      >
+        <pre style={{ maxHeight: '600px', overflow: 'auto', background: '#f5f5f5', padding: '20px', borderRadius: '4px' }}>
+          {code}
+        </pre>
+      </Modal>
     </div>
   );
 }

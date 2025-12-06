@@ -22,11 +22,32 @@ export const projectSlice = createSlice({
         setSelectedId: (state, action: PayloadAction<string | null>) => {
             state.selectedId = action.payload
         },
-        addComponent: (state, action: PayloadAction<ComponentSchema>) => {
-            if (!state.page.root.children) {
-                state.page.root.children = []
+        addComponent: (state, action: PayloadAction<{ component: ComponentSchema; parentId?: string }>) => {
+            const { component, parentId } = action.payload
+
+            // 如果没有指定parentId，默认加到root下
+            if (!parentId) {
+                state.page.root.children = state.page.root.children || []
+                state.page.root.children.push(component)
+                return
             }
-            state.page.root.children.push(action.payload)
+
+            // 如果制定了parentId，通过递归找到那个父组件
+            const addRecursive = (node: ComponentSchema) => {
+                if (node.id === parentId) {
+                    node.children = node.children || []
+                    node.children.push(component)
+                    return true
+                }
+                if (node.children) {
+                    for (const child of node.children) {
+                        if (addRecursive(child)) return true
+                    }
+                }
+                return false
+            }
+
+            addRecursive(state.page.root)
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         updateComponentProps: (state, action: PayloadAction<{ id: string; props: any }>) => {

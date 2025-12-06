@@ -28,21 +28,32 @@ const ComponentMap: Record<string, React.FC<any>> = {
 };
 
 
-// 归渲染器
+// 递归渲染器
 const RenderComponent: React.FC<{ schema: ComponentSchema; isSortable?: boolean }> = ({ schema, isSortable }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.present.selectedId);
-
+  
+  const { setNodeRef } = useDroppable({
+    id: schema.id,
+    disabled: schema.type !== 'Container',
+    data: { isContainer: true }
+  })
+  
   // 查字典：找组件
   const Component = ComponentMap[schema.type];
   if (!Component) {
     return <div>未知组件类型：{schema.type}</div>;
   }
 
-  // 递归渲染子节点
-  const children = schema.children?.map((child) => (
-    <RenderComponent key={child.id} schema={child} />
-  ));
+  const childrenContent = schema.children?.map((child) => (
+    <RenderComponent key={child.id} schema={child} isSortable={true} />
+  ))
+
+  const children = (schema.children && schema.children.length > 0) ? (
+    <SortableContext items={schema.children.map(c => c.id)} strategy={verticalListSortingStrategy}>
+      {childrenContent}
+    </SortableContext>
+  ) : childrenContent
 
   // 点击处理：设置选中 ID
   const handleClick = (e: React.MouseEvent) => {
@@ -57,7 +68,11 @@ const RenderComponent: React.FC<{ schema: ComponentSchema; isSortable?: boolean 
     : { cursor: 'pointer' };
 
   const content = (
-    <div onClick={handleClick} style={outlineStyle}>
+    <div
+      ref={schema.type === 'Container' ? setNodeRef : null}
+      onClick={handleClick}
+      style={{...outlineStyle, minHeight: schema.type === 'Container' ? '50px' : 'auto'}}
+    >
       <Component style={schema.style} {...schema.props}>
         {children}
       </Component>
@@ -103,7 +118,6 @@ function App() {
   const [code, setCode] = useState('') // 暂存生成的源代码
 
   // 辅助函数：根据 ID 在树中查找组件对象 (为了在右侧回显属性)
-  // 实际项目中建议把这个逻辑移到 Redux Selector 中
   const findNode = (node: ComponentSchema, id: string): ComponentSchema | null => {
     if (node.id === id) return node;
     if (node.children) {
@@ -120,38 +134,49 @@ function App() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
-    // 如果没拖到任何有效区域，直接结束
     if (!over) return
-    
+
+    // 场景1：从左侧物料区拖入新组件
     if (active.data.current?.type) {
-      if (over.id === 'canvas-root' || over.data.current?.sortable) {
-        const type = active.data.current?.type as ComponentType
-
+        const type = active.data.current.type as ComponentType
         const newComponent: ComponentSchema = {
-          id: uuid(),
-          type,
-          name: type,
-          props: {},
-          children: []
+            id: uuid(),
+            type,
+            name: type,
+            props: {},
+            children: []
         }
-
+        
         if (type === 'Button') {
-          newComponent.props = { children: '新按钮' }
+             newComponent.props = { children: '新按钮' }
         } else if (type === 'Text') {
-          newComponent.props = { text: '默认文本', fontSize: '14px', color: '#000' }
+             newComponent.props = { text: '默认文本', fontSize: '14px', color: '#000' }
         } else if (type === 'Input') {
-          newComponent.props = { placeholder: '请输入...' }
+             newComponent.props = { placeholder: '请输入...' }
+        } else if (type === 'Container') {
+             newComponent.props = {}
+             newComponent.style = { border: '1px solid #999', padding: '10px', minHeight: '100px' } // 给容器加个默认边框
         }
 
-        dispatch(addComponent(newComponent))
-      }
-    }
+        let parentId = 'root'
+        if (over.data.current?.isContainer) {
+            parentId = over.id as string
+        } else if (over.id === 'canvas-root') {
+            parentId = 'root'
+        }
+
+        dispatch(addComponent({
+            component: newComponent,
+            parentId
+        }))
+    } 
+    // 场景2：画布内部排序
     else if (active.id !== over.id) {
-      dispatch(moveComponent({
-        componentId: active.id as string,
-        activeId: active.id as string,
-        overId: over.id as string 
-      }))
+        dispatch(moveComponent({
+            componentId: active.id as string,
+            activeId: active.id as string,
+            overId: over.id as string
+        }))
     }
   }
 
@@ -194,6 +219,9 @@ function App() {
             </DraggableSource>
             <DraggableSource type="Input">
               <Button block>输入框</Button>
+            </DraggableSource>
+            <DraggableSource type="Container">
+              <Button block style={{ border: '1px dashed #666' }}>容器(Container)</Button>
             </DraggableSource>
           </div>
         </div>

@@ -14,7 +14,7 @@ export const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        cursor: 'move',
+        // cursor: 'move', // 移除全局 move 光标，避免误导
         touchAction: 'none'
     }
 

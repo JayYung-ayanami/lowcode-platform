@@ -12,6 +12,24 @@ const initialState: ProjectState = {
     selectedId: null
 }
 
+// 辅助函数：在树中查找节点及其父节点
+function findNodeWithParent(
+    root: ComponentSchema,
+    targetId: string,
+    parent: ComponentSchema | null = null
+): { node: ComponentSchema; parent: ComponentSchema | null } | null {
+    if (root.id === targetId) {
+        return { node: root, parent }
+    }
+    if (root.children) {
+        for (const child of root.children) {
+            const result = findNodeWithParent(child, targetId, root)
+            if (result) return result
+        }
+    }
+    return null
+}
+
 export const projectSlice = createSlice({
     name: 'project',
     initialState,
@@ -22,21 +40,17 @@ export const projectSlice = createSlice({
         setSelectedId: (state, action: PayloadAction<string | null>) => {
             state.selectedId = action.payload
         },
-        addComponent: (state, action: PayloadAction<{ component: ComponentSchema; parentId?: string }>) => {
-            const { component, parentId } = action.payload
+        addComponent: (state, action: PayloadAction<{ component: ComponentSchema; parentId?: string; insertAtIndex?: number }>) => {
+            const { component, parentId, insertAtIndex } = action.payload
 
-            // 如果没有指定parentId，默认加到root下
-            if (!parentId) {
-                state.page.root.children = state.page.root.children || []
-                state.page.root.children.push(component)
-                return
-            }
-
-            // 如果制定了parentId，通过递归找到那个父组件
-            const addRecursive = (node: ComponentSchema) => {
-                if (node.id === parentId) {
+            const addRecursive = (node: ComponentSchema): boolean => {
+                if (node.id === (parentId || 'root')) {
                     node.children = node.children || []
-                    node.children.push(component)
+                    if (insertAtIndex !== undefined && insertAtIndex >= 0) {
+                        node.children.splice(insertAtIndex, 0, component)
+                    } else {
+                        node.children.push(component)
+                    }
                     return true
                 }
                 if (node.children) {
@@ -88,23 +102,70 @@ export const projectSlice = createSlice({
                 state.selectedId = null
             }
         },
-        moveComponent: (state, action: PayloadAction<{ componentId: string; activeId: string; overId: string }>) => {
-            const { activeId, overId } = action.payload
-            if (activeId === overId) return
-            
-            const rootChildren = state.page.root.children
-            if (!rootChildren) return
+        reorderComponents: (state, action: PayloadAction<{ parentId: string; oldIndex: number; newIndex: number }>) => {
+            const { parentId, oldIndex, newIndex } = action.payload
 
-            const oldIndex = rootChildren.findIndex(c => c.id === activeId)
-            const newIndex = rootChildren.findIndex(c => c.id === overId)
-
-            if (oldIndex !== -1 && newIndex !== -1) {
-                const [movedItem] = rootChildren.splice(oldIndex, 1)
-                rootChildren.splice(newIndex, 0, movedItem)
+            const reorderRecursive = (node: ComponentSchema): boolean => {
+                if (node.id === parentId) {
+                    if (!node.children || oldIndex < 0 || newIndex < 0 || oldIndex >= node.children.length || newIndex >= node.children.length) {
+                        return true
+                    }
+                    const [removed] = node.children.splice(oldIndex, 1)
+                    node.children.splice(newIndex, 0, removed)
+                    return true
+                }
+                if (node.children) {
+                    for (const child of node.children) {
+                        if (reorderRecursive(child)) return true
+                    }
+                }
+                return false
             }
+
+            reorderRecursive(state.page.root)
+        },
+        moveComponentToNewParent: (state, action: PayloadAction<{ componentId: string; newParentId: string; newIndex: number }>) => {
+            const { componentId, newParentId, newIndex } = action.payload
+
+            // 1. 找到要移动的组件和它的父节点
+            const activeResult = findNodeWithParent(state.page.root, componentId)
+            if (!activeResult || !activeResult.parent) return
+
+            const { node: activeNode, parent: oldParent } = activeResult
+
+            // 2. 从旧父节点中删除
+            if (oldParent.children) {
+                oldParent.children = oldParent.children.filter(c => c.id !== componentId)
+            }
+
+            // 3. 找到新父节点并插入
+            const insertRecursive = (node: ComponentSchema): boolean => {
+                if (node.id === newParentId) {
+                    node.children = node.children || []
+                    node.children.splice(newIndex, 0, activeNode)
+                    return true
+                }
+                if (node.children) {
+                    for (const child of node.children) {
+                        if (insertRecursive(child)) return true
+                    }
+                }
+                return false
+            }
+
+            insertRecursive(state.page.root)
         }
     }
 })
 
-export const { setPageTitle, setSelectedId, updateComponentProps, addComponent, deleteComponent, moveComponent } = projectSlice.actions
+export const { 
+    setPageTitle, 
+    setSelectedId, 
+    updateComponentProps, 
+    addComponent, 
+    deleteComponent, 
+    reorderComponents,
+    moveComponentToNewParent
+} = projectSlice.actions
+
 export default projectSlice.reducer

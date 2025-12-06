@@ -14,7 +14,13 @@ export const initialPage: PageSchema = {
                 type: 'Container',
                 name: '白色卡片',
                 props: {},
-                style: { padding: '20px', backgroundColor: '#', minHeight: '300px' },
+                style: { 
+                    padding: '20px', 
+                    backgroundColor: '#fff', 
+                    minHeight: '300px',
+                    border: '1px solid #d9d9d9',
+                    borderRadius: '4px'
+                },
                 children: [
                     {
                         id: '2',

@@ -78,9 +78,29 @@ export const projectSlice = createSlice({
             if (state.selectedId === id) {
                 state.selectedId = null
             }
+        },
+        moveComponent: (state, action: PayloadAction<{ componentId: string; activeId: string; overId: string }>) => {
+            // activeId：被拖拽的组件ID
+            // overId：放置目标的组件ID
+            const { activeId, overId } = action.payload
+
+            if (!activeId || !overId) return
+
+            const rootChildren = state.page.root.children
+            if (!rootChildren) return
+
+            const oldIndex = rootChildren.findIndex(child => child.id === activeId)
+            const newIndex = rootChildren.findIndex(child => child.id === overId)
+
+            if (oldIndex !== -1 && newIndex !== -1) {
+                // 把老位置的那个元素切出来（splice返回的是数组，所以用[movedId]解构出来）
+                const [movedId] = rootChildren.splice(oldIndex, 1)
+                // 把切出来的元素插到新位置去
+                rootChildren.splice(newIndex, 0, movedId)
+            }
         }
     }
 })
 
-export const { setPageTitle, setSelectedId, updateComponentProps, addComponent, deleteComponent } = projectSlice.actions
+export const { setPageTitle, setSelectedId, updateComponentProps, addComponent, deleteComponent, moveComponent } = projectSlice.actions
 export default projectSlice.reducer

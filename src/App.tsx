@@ -5,11 +5,14 @@ import type { ComponentSchema, ComponentType } from './types/schema';
 import { setSelectedId, updateComponentProps, addComponent, deleteComponent } from './store/projectSlice';
 import { DraggableSource } from './editor/materials/DraggableSource';
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
-import { v4 as uuid } from 'uuid'
-import { Modal } from 'antd'
-import { useState } from 'react'
-import { generatePageCode } from './utils/codegen'
-import './App.css';
+import { v4 as uuid } from 'uuid';
+import { Modal } from 'antd';
+import { useState } from 'react';
+import { generatePageCode } from './utils/codegen';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableItem } from './editor/materials/SortableItem';
+import { moveComponent } from './store/projectSlice';
+import './App.css'
 
 
 // 组件映射表
@@ -25,7 +28,7 @@ const ComponentMap: Record<string, React.FC<any>> = {
 
 
 // 归渲染器
-const RenderComponent: React.FC<{ schema: ComponentSchema }> = ({ schema }) => {
+const RenderComponent: React.FC<{ schema: ComponentSchema; isSortable?: boolean }> = ({ schema, isSortable }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.selectedId);
 
@@ -52,17 +55,23 @@ const RenderComponent: React.FC<{ schema: ComponentSchema }> = ({ schema }) => {
     ? { outline: '2px solid #1890ff', position: 'relative' as const, zIndex: 1, cursor: 'pointer' } 
     : { cursor: 'pointer' };
 
-  return (
+  const content = (
     <div onClick={handleClick} style={outlineStyle}>
       <Component style={schema.style} {...schema.props}>
         {children}
       </Component>
     </div>
-  );
+  )
+
+  if (isSortable) {
+    return <SortableItem id={schema.id}>{content}</SortableItem>
+  }
+
+  return content
 };
 
 // 画布区域组件
-const CanvasArea: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const CanvasArea: React.FC<{ children: React.ReactNode; items: string[] }> = ({ children, items }) => {
   const { isOver, setNodeRef } = useDroppable({
     id: 'canvas-root'
   })
@@ -70,12 +79,15 @@ const CanvasArea: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const style = {
     minHeight: '100%',
     border: isOver ? '2px dashed #1890ff' : '1px solid transparent',
-    transition: 'all 0.2s'
+    transition: 'all 0.2s',
+    padding: '20px'
   }
 
   return (
     <div ref={setNodeRef} style={style} className='canvas-paper'>
-      {children}
+      <SortableContext items={items} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
     </div>
   )
 } 
@@ -107,12 +119,13 @@ function App() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
 
-    // 如果此时鼠标停留在ID为'canvas-root'的区域（即CanvasArea）
-    if (over && over.id === 'canvas-root') {
-      // 获取拖拽元素携带的数据（在DraggableSource里存的data:{ type }）
-      const type = active.data.current?.type as ComponentType
+    // 如果没拖到任何有效区域，直接结束
+    if (!over) return
+    
+    if (active.data.current?.type) {
+      if (over.id === 'canvas-root' || over.data.current?.sortable) {
+        const type = active.data.current?.type as ComponentType
 
-      if (type) {
         const newComponent: ComponentSchema = {
           id: uuid(),
           type,
@@ -131,6 +144,13 @@ function App() {
 
         dispatch(addComponent(newComponent))
       }
+    }
+    else if (active.id !== over.id) {
+      dispatch(moveComponent({
+        componentId: active.id as string,
+        activeId: active.id as string,
+        overId: over.id as string 
+      }))
     }
   }
 
@@ -171,8 +191,10 @@ function App() {
 
         {/* 中间：画布 */}
         <div className="canvas-area">
-          <CanvasArea>
-            <RenderComponent schema={page.root} />
+          <CanvasArea items={page.root.children?.map(c => c.id) || []}>
+            {page.root.children?.map(child => (
+              <RenderComponent key={child.id} schema={child} isSortable={true} />
+            ))}
           </CanvasArea>
         </div>
 

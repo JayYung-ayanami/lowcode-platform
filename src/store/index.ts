@@ -1,9 +1,16 @@
 import { configureStore } from '@reduxjs/toolkit'
 import projectReducer from './projectSlice'
+import undoable, { excludeAction } from 'redux-undo'
 
 export const store = configureStore({
     reducer: {
-        project: projectReducer
+        project: undoable(projectReducer, {
+            // 忽略某些action，不让它们进入历史栈
+            filter: excludeAction([
+                'project/setSelectedId',
+                'project/setPageTitle'
+            ])
+        })
     }
 })
 

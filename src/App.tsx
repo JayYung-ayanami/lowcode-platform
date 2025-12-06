@@ -12,6 +12,7 @@ import { generatePageCode } from './utils/codegen';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableItem } from './editor/materials/SortableItem';
 import { moveComponent } from './store/projectSlice';
+import { ActionCreators } from 'redux-undo';
 import './App.css'
 
 
@@ -30,7 +31,7 @@ const ComponentMap: Record<string, React.FC<any>> = {
 // 归渲染器
 const RenderComponent: React.FC<{ schema: ComponentSchema; isSortable?: boolean }> = ({ schema, isSortable }) => {
   const dispatch = useAppDispatch();
-  const selectedId = useAppSelector(state => state.project.selectedId);
+  const selectedId = useAppSelector(state => state.project.present.selectedId);
 
   // 查字典：找组件
   const Component = ComponentMap[schema.type];
@@ -96,8 +97,8 @@ const CanvasArea: React.FC<{ children: React.ReactNode; items: string[] }> = ({ 
 function App() {
   const dispatch = useAppDispatch();
   // 从 Redux 读取数据
-  const page = useAppSelector((state) => state.project.page);
-  const selectedId = useAppSelector((state) => state.project.selectedId);
+  const page = useAppSelector((state) => state.project.present.page);
+  const selectedId = useAppSelector((state) => state.project.present.selectedId);
   const [isModalOpen, setIsModalOpen] = useState(false) // 是否打开代码生成弹窗
   const [code, setCode] = useState('') // 暂存生成的源代码
 
@@ -165,7 +166,15 @@ function App() {
       {/* 顶部导航 */}
       <div className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' }}>
         <div>LowCode Engine</div>
-        <Button type="primary" onClick={handleSave}>生成代码</Button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <Button onClick={() => dispatch(ActionCreators.undo())}>
+            撤销
+          </Button>
+          <Button onClick={() => dispatch(ActionCreators.redo())}>
+            重做
+          </Button>
+          <Button type="primary" onClick={handleSave}>生成代码</Button>
+        </div>
       </div>
 
       {/* 主体三栏布局 */}

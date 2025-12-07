@@ -1,4 +1,5 @@
 # Logs
+# 忽略各种运行日志或报错日志
 logs
 *.log
 npm-debug.log*
@@ -7,12 +8,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# 忽略存放所有第三方库和依赖的巨型文件夹
 node_modules
+
+# 忽略打包后的输出目录
 dist
 dist-ssr
+
+# 忽略所有以此结尾的文件
+# 通常指.env.local等环境变量文件，开发者常在这里存数据库密码或API Key，这些私密信息不能公开提交到仓库
 *.local
 
-# Editor directories and files
+# 忽略编辑器生成的配置和操作系统的临时文件
 .vscode/*
 !.vscode/extensions.json
 .idea

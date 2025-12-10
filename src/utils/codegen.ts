@@ -18,10 +18,11 @@ const generateProps = (props: Record<string, any>): string => {
 
 // 递归生成组件代码
 const generateComponentCode = (node: ComponentSchema, indent: number = 0): string => {
-    const spaces = ' '.repeat(indent) // 生成指定数量的空格字符串，用来做代码缩进
+    // 生成指定数量的空格字符串，用来做代码缩进
+    const spaces = ' '.repeat(indent) 
     const propsStr = generateProps(node.props)
 
-    // 只有当style存在且不为空时，才生成style属性
+    // 如果style存在且不为空，才生成style属性
     const styleStr = (node.style && Object.keys(node.style).length > 0)
       ? `style={${JSON.stringify(node.style)}}`
       : ''

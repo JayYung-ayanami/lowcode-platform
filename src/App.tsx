@@ -10,7 +10,7 @@ import {
   useSensors,
   PointerSensor,
   DragOverlay,
-  pointerWithin,
+  rectIntersection,
   type DragEndEvent,
   type DragStartEvent,
   type DragOverEvent
@@ -291,7 +291,7 @@ function App() {
       </div>
 
       {/* 主体三栏布局 */}
-      <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={pointerWithin}>
+      <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={rectIntersection}>
       <div className="editor-container">
         
         {/* 左侧：物料面板 */}

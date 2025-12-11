@@ -4,6 +4,8 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useAppSelector } from '../../store/hook';
 import { RenderComponent } from '../RenderComponent';
 
+import { ShadowSandbox } from '../components/ShadowSandbox';
+
 // 画布区域组件
 const CanvasArea: React.FC<{ children: React.ReactNode; items: string[] }> = ({ children, items }) => {
   const { isOver, setNodeRef } = useDroppable({
@@ -32,18 +34,20 @@ export const CanvasPanel: React.FC<{ overId: string | null; activeId: string | n
 
   return (
     <div className="canvas-area">
-      <CanvasArea items={page.root.children?.map(c => c.id) || []}>
-        {page.root.children?.map(child => (
-          <RenderComponent 
-            key={child.id} 
-            schema={child} 
-            isSortable={true} 
-            overId={overId} 
-            activeId={activeId} 
-            involvedIds={involvedIds} 
-          />
-        ))}
-      </CanvasArea>
+      <ShadowSandbox className="canvas-sandbox">
+        <CanvasArea items={page.root.children?.map(c => c.id) || []}>
+          {page.root.children?.map(child => (
+            <RenderComponent 
+              key={child.id} 
+              schema={child} 
+              isSortable={true} 
+              overId={overId} 
+              activeId={activeId} 
+              involvedIds={involvedIds} 
+            />
+          ))}
+        </CanvasArea>
+      </ShadowSandbox>
     </div>
   );
 };

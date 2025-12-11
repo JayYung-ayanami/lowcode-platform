@@ -19,12 +19,14 @@ const parseExpression = (str: any, variables: Record<string, any>) => {
   return str
 }
 
-export const RenderComponent: React.FC<{ 
+// InnerRenderComponent 的 Props 定义增加 involvedIds
+const InnerRenderComponent: React.FC<{ 
     schema: ComponentSchema; 
     isSortable?: boolean;
     overId?: string | null;
-    activeId?: string | null
-}> = ({ schema, isSortable, overId, activeId }) => {
+    activeId?: string | null;
+    involvedIds?: Set<string>; // 【新增】受影响的组件 ID 集合
+}> = ({ schema, isSortable, overId, activeId, involvedIds }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.present.selectedId);
   const variables = useAppSelector(state => state.project.present.variables);
@@ -116,7 +118,14 @@ export const RenderComponent: React.FC<{
   }
 
   const childrenContent = schema.children?.map((child) => (
-    <RenderComponent key={child.id} schema={child} isSortable={true} overId={overId} activeId={activeId} />
+    <RenderComponent 
+      key={child.id} 
+      schema={child} 
+      isSortable={true} 
+      overId={overId} 
+      activeId={activeId} 
+      involvedIds={involvedIds} 
+    />
   ))
 
   // 构建排序环境
@@ -176,12 +185,25 @@ export const RenderComponent: React.FC<{
 
   // 拖拽目标高亮样式
   // 只有当别人拖到我头上，且我不是正在被拖的那个人时，才显示高亮
-  const dragOverStyle = isOverTarget && !isDragging ? {
-    boxShadow: schema.type === 'Container' 
-      ? 'inset 0 0 0 2px #52c41a' // 容器用内阴影，表示"放入内部"
-      : '0 -2px 0 0 #1890ff', // 普通组件用上边框，表示"插入到上方"
-    position: 'relative' as const
-  } : {};
+  const dragOverStyle: React.CSSProperties = !isDragging ? (
+    // 情况A: 鼠标悬停在容器的内部感应区 -> 显示"放入内部"样式 (全框+背景)
+    (overId === `${schema.id}-drop`) 
+      ? {
+          boxShadow: 'inset 0 0 0 2px #1890ff, 0 0 10px rgba(24, 144, 255, 0.3)', 
+          backgroundColor: 'rgba(24, 144, 255, 0.05)',
+          borderRadius: '4px',
+          position: 'relative',
+          zIndex: 10
+        }
+      // 情况B: 鼠标悬停在组件本身(包括容器的边缘) -> 显示"插入前方"样式 (上边框线)
+      : (isOverTarget)
+        ? {
+            boxShadow: '0 -4px 0 0 #1890ff', 
+            position: 'relative',
+            zIndex: 10
+          }
+        : {}
+  ) : {};
 
   // 最终渲染的组件内容
   const content = (
@@ -192,6 +214,12 @@ export const RenderComponent: React.FC<{
         ...dragOverStyle,
         opacity: isDragging ? 0.5 : 1, // 如果正在被拖拽，变半透明
         transition: 'all 0.2s',
+        // 使用透明边框代替 margin，扩大感应热区
+        borderBottom: '8px solid transparent',
+        borderTop: '8px solid transparent', // 【新增】顶部也加透明边框，用于触发"插入前方"
+        // 必须设置 position，否则 z-index 不生效
+        position: 'relative',
+        boxSizing: 'border-box'
       }}
     >
       {/* 分支渲染逻辑：空容器、非空容器、普通组件 */}
@@ -248,3 +276,17 @@ export const RenderComponent: React.FC<{
 
   return content
 };
+
+export const RenderComponent = React.memo(InnerRenderComponent, (prevProps, nextProps) => {
+  // 1. 如果 Schema 本身变了（比如属性修改），必须重渲染
+  if (prevProps.schema !== nextProps.schema) return false
+
+  // 2. 如果拖拽状态（activeId/overId）变了，简单起见，我们允许重渲染
+  // 之前的深度比较逻辑虽然性能好，但容易导致高亮状态更新滞后或遗漏
+  // 尤其是在拖拽快速移动时，或者涉及 transform 位移时
+  if (prevProps.overId !== nextProps.overId) return false
+  if (prevProps.activeId !== nextProps.activeId) return false
+  if (prevProps.involvedIds !== nextProps.involvedIds) return false
+
+  return true
+})

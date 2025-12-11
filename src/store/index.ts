@@ -1,7 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit'
 import projectReducer from './projectSlice'
 // 引入redux-undo库，用于给reducer增加撤销/重做功能
-import undoable, { excludeAction } from 'redux-undo'
+import undoable, { excludeAction, groupByActionTypes } from 'redux-undo'
 
 export const store = configureStore({
     reducer: {
@@ -11,18 +11,23 @@ export const store = configureStore({
          * 访问数据时需要变为state.project.present.xxx
          */
         project: undoable(projectReducer, {
+            // 限制历史记录栈的长度，防止内存移出
+            limit: 20,
             /**
              * 过滤配置：决定哪些操作需要被”记录“到历史栈中
              * excludeAction意味着：列表里的这些动作发生时，不会产生新的历史记录（不会导致撤销栈增加）
              */
             filter: excludeAction([
-                /**
-                 * 以下两个action不参与历史记录
-                 * setSelectedId：选中组件只是单纯的UI交互，不属于“文档修改”，所以不应该被撤销
-                 * setPageTitle：修改页面标题如果不希望被撤销，这里也排除（看具体需求）
-                 */
-                'project/setSelectedId',
-                'project/setPageTitle'
+                'project/setSelectedId'
+            ]),
+            /**
+             * 分组配置：决定哪些操作可以被合并到同一个历史记录中
+             * groupByActionTypes意味着：列表里的这些动作发生时，会被合并到同一个历史记录中
+             */
+            groupBy: groupByActionTypes([
+                'project/updateComponentProps',
+                'project/reorderComponents',
+                'project/setVariable'
             ])
         })
     }

@@ -26,35 +26,70 @@ import { SettingPanel } from './editor/panels/SettingPanel';
 // Utils
 import { findNode, findParentAndIndex } from './utils/treeUtils';
 import { generatePageCode } from './utils/codegen';
+import { useMemo } from 'react';
+
+// 辅助函数：根据 ID 回溯所有祖先 ID (包含自己)
+const getAncestors = (nodeMap: Record<string, { parentId: string | null }>, id: string | null): Set<string> => {
+  const ancestors = new Set<string>();
+  if (!id) return ancestors;
+  
+  let currentId: string | null = id;
+  // 防止死循环，设定一个最大深度
+  let depth = 0;
+  while (currentId && depth < 100) {
+      ancestors.add(currentId);
+      const record: { parentId: string | null } | undefined = nodeMap[currentId];
+      if (record && record.parentId) {
+          currentId = record.parentId;
+      } else {
+          break;
+      }
+      depth++;
+  }
+  return ancestors;
+}
 
 // 主应用
 function App() {
   // Redux: 获取 dispatch 用于触发 action
   const dispatch = useAppDispatch();
-  // Redux: 获取当前页面数据（present 表示当前状态，支持撤销重做）
+  // Redux: 获取当前页面数据
   const page = useAppSelector((state) => state.project.present.page);
-
-  // State: 控制"查看代码"弹窗的开关
-  const [isModalOpen, setIsModalOpen] = useState(false) 
-  // State: 存储生成的源代码
-  const [code, setCode] = useState('') 
+  // Redux: 获取 nodeMap 用于快速计算祖先路径
+  const nodeMap = useAppSelector((state) => state.project.present.nodeMap);
 
   // Dnd: 当前正在拖拽的组件 ID (active)
   const [activeId, setActiveId] = useState<string | null>(null);
   // Dnd: 当前拖拽经过的组件 ID (over)
   const [overId, setOverId] = useState<string | null>(null); 
+  const [code, setCode] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false); 
 
-  // 拖拽开始：记录当前被拖拽的组件 ID
+  // 【优化】计算受拖拽影响的组件 ID 集合 (自己 + 祖先)
+  // 这些组件需要重渲染，以便透传高亮状态给子组件
+  const involvedIds = useMemo(() => {
+      const activeAncestors = getAncestors(nodeMap, activeId);
+      const overAncestors = getAncestors(nodeMap, overId);
+      // 合并两个集合
+      return new Set([...activeAncestors, ...overAncestors]);
+  }, [activeId, overId, nodeMap]);
+
+  // 拖拽开始
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
-    setOverId(null);
   };
 
-  // 拖拽移动中：实时记录鼠标下方的组件 ID（用于高亮提示）
+  // 拖拽移动
   const handleDragOver = (event: DragOverEvent) => {
     const { over } = event;
-    setOverId(over ? over.id as string : null);
+    setOverId(over ? String(over.id) : null);
   };
+  
+  // ... (return 里的 CanvasPanel 部分修改) ...
+  
+        {/* 中间：画布 */}
+        {/* 将 involvedIds 传给 CanvasPanel */}
+        <CanvasPanel overId={overId} activeId={activeId} involvedIds={involvedIds} />
 
   // 拖拽结束：处理组件的创建、移动和排序的核心逻辑
   const handleDragEnd = (event: DragEndEvent) => {
@@ -263,7 +298,7 @@ function App() {
         <MaterialPanel />
 
         {/* 中间：画布 */}
-        <CanvasPanel overId={overId} activeId={activeId} />
+        <CanvasPanel overId={overId} activeId={activeId} involvedIds={involvedIds} />
 
         {/* 右侧：属性面板 */}
         <SettingPanel />
@@ -271,7 +306,7 @@ function App() {
       </div>
       <DragOverlay>
         {activeId && !activeId.startsWith('new-') ? (
-            <div style={{ padding: '8px 16px', border: '2px solid #1890ff', background: '#fff', borderRadius: '4px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)' }}>
+            <div style={{ padding: '8px 16px', border: '2px solid #1890ff', background: '#fff', borderRadius: '4px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', pointerEvents: 'none' }}>
                 拖拽中...
             </div>
         ) : null}

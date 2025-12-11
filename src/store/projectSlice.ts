@@ -1,12 +1,30 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import type { PageSchema, ComponentSchema } from '../types/schema'
 import { initialPage } from '../mock'
+import { findNode } from '../utils/treeUtils'
+
+interface NodeRecord {
+    parentId: string | null;
+}
 
 interface ProjectState {
     page: PageSchema
     selectedId: string | null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     variables: Record<string, any>
+    nodeMap: Record<string, NodeRecord>
+}
+
+const buildNodeMap = (root: ComponentSchema): Record<string, NodeRecord> => {
+    const map: Record<string, NodeRecord> = {}
+    const traverse = (node: ComponentSchema, parentId: string | null) => {
+        map[node.id] = { parentId }
+        if (node.children) {
+            node.children.forEach(child => traverse(child, node.id))
+        }
+    }
+    traverse(root, null)
+    return map
 }
 
 const initialState: ProjectState = {
@@ -16,25 +34,8 @@ const initialState: ProjectState = {
         username: 'Guest',
         email: 'guest@example.com',
         counter: 0
-    }
-}
-
-// 辅助函数：查找节点及其父节点
-function findNodeWithParent(
-    currentNode: ComponentSchema,
-    targetId: string,
-    parent: ComponentSchema | null = null
-): { node: ComponentSchema; parent: ComponentSchema | null } | null {
-    if (currentNode.id === targetId) {
-        return { node: currentNode, parent }
-    }
-    if (currentNode.children) {
-        for (const child of currentNode.children) {
-            const result = findNodeWithParent(child, targetId, currentNode)
-            if (result) return result
-        }
-    }
-    return null
+    },
+    nodeMap: buildNodeMap(initialPage.root)
 }
 
 export const projectSlice = createSlice({
@@ -49,110 +50,102 @@ export const projectSlice = createSlice({
         },
         addComponent: (state, action: PayloadAction<{ component: ComponentSchema; parentId?: string; insertAtIndex?: number }>) => {
             const { component, parentId, insertAtIndex } = action.payload
-            const addRecursive = (node: ComponentSchema): boolean => {
-                if (node.id === (parentId || 'root')) {
-                    node.children = node.children || []
-                    if (insertAtIndex !== undefined && insertAtIndex >= 0) {
-                        node.children.splice(insertAtIndex, 0, component)
-                    } else {
-                        node.children.push(component)
-                    }
-                    return true 
+            const targetParentId = parentId || 'root'
+
+            const parentNode = findNode(state.page.root, targetParentId)
+            
+            if (parentNode) {
+                parentNode.children = parentNode.children || []
+                
+                if (insertAtIndex !== undefined && insertAtIndex >= 0) {
+                    parentNode.children.splice(insertAtIndex, 0, component)
+                } else {
+                    parentNode.children.push(component)
                 }
-                if (node.children) {
-                    for (const child of node.children) {
-                        if (addRecursive(child)) return true
+
+                // 更新 Map (仅用于索引 parentId)
+                const registerToMap = (node: ComponentSchema, pid: string) => {
+                    state.nodeMap[node.id] = { parentId: pid }
+                    if (node.children) {
+                        node.children.forEach(child => registerToMap(child, node.id))
                     }
                 }
-                return false
+                registerToMap(component, targetParentId)
             }
-            addRecursive(state.page.root)
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         updateComponentProps: (state, action: PayloadAction<{ id: string; props: any }>) => {
             const { id, props } = action.payload
-            const updateRecursive = (node: ComponentSchema) => {
-                if (node.id === id) {
-                    node.props = { ...node.props, ...props }
-                    return true
-                }
-                if (node.children) {
-                    for (const child of node.children) {
-                        if (updateRecursive(child)) return true
-                    }
-                }
-                return false
+            
+            const node = findNode(state.page.root, id)
+            if (node) {
+                node.props = { ...node.props, ...props }
             }
-            updateRecursive(state.page.root)
         },
         deleteComponent: (state, action: PayloadAction<string>) => {
             const id = action.payload
-            const deleteRecursive = (node: ComponentSchema, parent: ComponentSchema | null) => {
-                if (node.id === id) {
-                    if (parent && parent.children) {
-                        parent.children = parent.children.filter(child => child.id !== id)
-                        return true
+            
+            const record = state.nodeMap[id]
+            if (record && record.parentId) {
+                const parentNode = findNode(state.page.root, record.parentId)
+                if (parentNode && parentNode.children) {
+                    parentNode.children = parentNode.children.filter(child => child.id !== id)
+                }
+                
+                const unregisterFromMap = (nodeId: string) => {
+                    const target = state.nodeMap[nodeId]
+                    if (target) {
+                        delete state.nodeMap[nodeId]
                     }
                 }
-                if (node.children) {
-                    for (const child of node.children) {
-                        if (deleteRecursive(child, node)) return true
-                    }
-                }
-                return false
+                unregisterFromMap(id)
             }
-            deleteRecursive(state.page.root, null)
+            
             if (state.selectedId === id) {
                 state.selectedId = null
             }
         },
         reorderComponents: (state, action: PayloadAction<{ parentId: string; oldIndex: number; newIndex: number }>) => {
             const { parentId, oldIndex, newIndex } = action.payload
-            const reorderRecursive = (node: ComponentSchema): boolean => {
-                if (node.id === parentId) {
-                    if (!node.children || oldIndex < 0 || newIndex < 0 || oldIndex >= node.children.length || newIndex >= node.children.length) {
-                        return true
-                    }
-                    const [removed] = node.children.splice(oldIndex, 1)
-                    node.children.splice(newIndex, 0, removed)
-                    return true
+            
+            const parentNode = findNode(state.page.root, parentId)
+            
+            if (parentNode && parentNode.children) {
+                const children = parentNode.children
+                if (oldIndex >= 0 && newIndex >= 0 && oldIndex < children.length && newIndex < children.length) {
+                    const [removed] = children.splice(oldIndex, 1)
+                    children.splice(newIndex, 0, removed)
                 }
-                if (node.children) {
-                    for (const child of node.children) {
-                        if (reorderRecursive(child)) return true
-                    }
-                }
-                return false
             }
-            reorderRecursive(state.page.root)
         },
         moveComponentToNewParent: (state, action: PayloadAction<{ componentId: string; newParentId: string; newIndex: number }>) => {
             const { componentId, newParentId, newIndex } = action.payload
-            const activeResult = findNodeWithParent(state.page.root, componentId)
-            if (!activeResult || !activeResult.parent) return
-            const { node: activeNode, parent: oldParent } = activeResult
-            if (oldParent.children) {
-                oldParent.children = oldParent.children.filter(c => c.id !== componentId)
-            }
-            const insertRecursive = (node: ComponentSchema): boolean => {
-                if (node.id === newParentId) {
-                    node.children = node.children || []
-                    node.children.splice(newIndex, 0, activeNode)
-                    return true
-                }
-                if (node.children) {
-                    for (const child of node.children) {
-                        if (insertRecursive(child)) return true
+            
+            const activeRecord = state.nodeMap[componentId]
+            
+            if (activeRecord && activeRecord.parentId) {
+                const oldParentNode = findNode(state.page.root, activeRecord.parentId)
+                const newParentNode = findNode(state.page.root, newParentId)
+                
+                if (oldParentNode && newParentNode && oldParentNode.children) {
+                    const componentToMove = oldParentNode.children.find(c => c.id === componentId)
+                    
+                    if (componentToMove) {
+                        oldParentNode.children = oldParentNode.children.filter(c => c.id !== componentId)
+                        
+                        newParentNode.children = newParentNode.children || []
+                        newParentNode.children.splice(newIndex, 0, componentToMove)
+                        
+                        state.nodeMap[componentId].parentId = newParentId
                     }
                 }
-                return false
             }
-            insertRecursive(state.page.root)
         },
         resetProject: (state) => {
             state.page = initialPage
             state.selectedId = null
-            state.variables = { username: 'Guest' }
+            state.variables = initialState.variables
+            state.nodeMap = buildNodeMap(initialPage.root)
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setVariable: (state, action: PayloadAction<{ key: string; value: any }>) => {

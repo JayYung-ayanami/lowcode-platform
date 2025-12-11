@@ -27,14 +27,21 @@ const CanvasArea: React.FC<{ children: React.ReactNode; items: string[] }> = ({ 
   )
 }
 
-export const CanvasPanel: React.FC<{ overId: string | null; activeId: string | null }> = ({ overId, activeId }) => {
+export const CanvasPanel: React.FC<{ overId: string | null; activeId: string | null; involvedIds?: Set<string> }> = ({ overId, activeId, involvedIds }) => {
   const page = useAppSelector((state) => state.project.present.page);
 
   return (
     <div className="canvas-area">
       <CanvasArea items={page.root.children?.map(c => c.id) || []}>
         {page.root.children?.map(child => (
-          <RenderComponent key={child.id} schema={child} isSortable={true} overId={overId} activeId={activeId} />
+          <RenderComponent 
+            key={child.id} 
+            schema={child} 
+            isSortable={true} 
+            overId={overId} 
+            activeId={activeId} 
+            involvedIds={involvedIds} 
+          />
         ))}
       </CanvasArea>
     </div>

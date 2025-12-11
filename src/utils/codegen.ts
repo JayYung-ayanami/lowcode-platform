@@ -1,69 +1,133 @@
 import type { PageSchema, ComponentSchema } from '../types/schema'
+import * as t from '@babel/types'
+import generate from '@babel/generator'
 
-// 辅助函数：将props对象转换为字符串
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const generateProps = (props: Record<string, any>): string => {
-  return Object.keys(props)
-    // 过滤掉children，因为它应该放在标签中间，而不是作为属性
-    .filter(key => key !== 'children')
-    .map((key) => {
-      const value = props[key]
-      if (typeof value === 'string') {
-        return `${key}="${value}"`
-      }
-      return `${key}={${JSON.stringify(value)}}`
-    })
-    .join(' ')
+const createJSXAttribute = (key: string, value: any): t.JSXAttribute => {
+  let propValue: t.StringLiteral | t.JSXExpressionContainer | null = null
+
+  if (typeof value === 'string') {
+    propValue = t.stringLiteral(value)
+  } else if (typeof value === 'number') {
+    propValue = t.jsxExpressionContainer(
+      t.numericLiteral(value)
+    )
+  } else if (typeof value === 'boolean') {
+    propValue = t.jsxExpressionContainer(
+      t.booleanLiteral(value)
+    )
+  } else if (value === null || value === undefined) {
+    propValue = null
+  } else {
+    // 兜底方案：尝试将值序列化后作为JS表达式
+    try {
+      propValue = t.jsxExpressionContainer(
+        t.identifier(JSON.stringify(value))
+      )
+    } catch {
+      console.warn(`无法处理的属性值类型: ${key}`, value)
+    }
+  }
+
+  return t.jsxAttribute(t.jsxIdentifier(key), propValue)
 }
 
-// 递归生成组件代码
-const generateComponentCode = (node: ComponentSchema, indent: number = 0): string => {
-    // 生成指定数量的空格字符串，用来做代码缩进
-    const spaces = ' '.repeat(indent) 
-    const propsStr = generateProps(node.props)
+const createJSXElement = (node: ComponentSchema): t.JSXElement => {
+  const attributes: t.JSXAttribute[] = []
+  
+  if (node.props) {
+    Object.entries(node.props).forEach(([key, value]) => {
+      if (key !== 'children') {
+        attributes.push(createJSXAttribute(key, value))
+      }
+    })
+  }
 
-    // 如果style存在且不为空，才生成style属性
-    const styleStr = (node.style && Object.keys(node.style).length > 0)
-      ? `style={${JSON.stringify(node.style)}}`
-      : ''
+  if (node.style && Object.keys(node.style).length > 0) {
+    const styleProperties = Object.entries(node.style).map(([k, v]) =>
+      t.objectProperty(t.identifier(k), t.stringLiteral(String(v)))
+    )
+    attributes.push(
+      t.jsxAttribute(
+        t.jsxIdentifier('style'),
+        t.jsxExpressionContainer(t.objectExpression(styleProperties))
+      )
+    )
+  }
 
-    // 组合属性字符串（去掉多余空格）
-    const attributes = [styleStr, propsStr].filter(Boolean).join(' ')
+  let childrenNodes: (t.JSXElement | t.JSXText | t.JSXExpressionContainer)[] = []
+  if (node.children && node.children.length > 0) {
+    // 情况 A: 有子组件
+    childrenNodes = node.children.map(child => createJSXElement(child))
+  } else if (typeof node.props?.children === 'string') {
+    // 情况 B: props.children 是纯文本
+    childrenNodes = [t.jsxText(node.props.children)]
+  }
 
-    // 获取子节点内容（可能是组件数组，也可能是props.children里的字符串）
-    let childrenCode = ''
+  const openingElement = t.jsxOpeningElement(
+    t.jsxIdentifier(node.type), 
+    attributes,
+    childrenNodes.length === 0
+  )
+  
+  const closingElement = childrenNodes.length === 0 
+    ? null 
+    : t.jsxClosingElement(t.jsxIdentifier(node.type))
 
-    if (node.children && node.children.length > 0) {
-      // 情况A：有嵌套的子组件（ComponentNode[]）
-      childrenCode = '\n' + node.children
-        .map(child => generateComponentCode(child, indent + 2))
-        .join('\n') + '\n' + spaces
-    } else if (typeof node.props.children === 'string') {
-      // 情况B：没有子组件，但props.children是文本
-      childrenCode = node.props.children
-    }
-
-    // 如果没有任何内容，使用自闭和标签
-    if (!childrenCode) {
-      return `${spaces}<${node.type} ${attributes}>`
-    }
-
-    // 生成完整标签
-    return `${spaces}<${node.type} ${attributes}>${childrenCode}</${node.type}>`
+  return t.jsxElement(openingElement, closingElement, childrenNodes, childrenNodes.length === 0)
 }
 
 export const generatePageCode = (page: PageSchema): string => {
-    const imports = `import React from 'react';\nimport { Button, Input } from 'antd';`
-    const rootComponentCode = generateComponentCode(page.root, 4) // 初始缩进4个空格
+  const ast = t.file(
+    t.program([
+      t.importDeclaration(
+        [t.importDefaultSpecifier(t.identifier('React'))],
+        t.stringLiteral('react')
+      ),
+      t.importDeclaration(
+        [
+          t.importSpecifier(t.identifier('Button'), t.identifier('Button')),
+          t.importSpecifier(t.identifier('Input'), t.identifier('Input')),
+          t.importSpecifier(t.identifier('Card'), t.identifier('Card')),
+        ],
+        t.stringLiteral('antd')
+      ),
+      // 3. export default function GeneratedPage() { ... }
+      t.exportDefaultDeclaration(
+        t.functionDeclaration(
+          t.identifier('GeneratedPage'),
+          [],
+          t.blockStatement([
+            t.returnStatement(
+              t.jsxElement(
+                t.jsxOpeningElement(
+                  t.jsxIdentifier('div'),
+                  [t.jsxAttribute(t.jsxIdentifier('className'), t.stringLiteral('page-container'))]
+                ),
+                t.jsxClosingElement(t.jsxIdentifier('div')),
+                [
+                  // 标题 H1
+                  t.jsxElement(
+                    t.jsxOpeningElement(t.jsxIdentifier('h1'), []),
+                    t.jsxClosingElement(t.jsxIdentifier('h1')),
+                    [t.jsxText(page.title)]
+                  ),
+                  // 递归生成的组件树
+                  createJSXElement(page.root)
+                ]
+              )
+            )
+          ])
+        )
+      )
+    ])
+  )
 
-    return `${imports}
+  const output = generate(ast, { 
+    jsescOption: { minimal: true },
+    retainLines: false,
+    compact: false,
+  })
 
-export default function GeneratedPage() {
-    return (
-      <div className="page-container">
-        <h1>${page.title}</h1>
-${rootComponentCode}
-      </div>  
-    )
-}`
+  return output.code
 }

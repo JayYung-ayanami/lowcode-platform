@@ -4,6 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useAppDispatch, useAppSelector } from '../store/hook';
 import { setSelectedId, setVariable } from '../store/projectSlice';
 import type { ComponentSchema } from '../types/schema';
+import { executeScript } from '../utils/sandbox';
 import { SortableItem } from './materials/SortableItem';
 import { ComponentMap } from './componentMap';
 
@@ -89,12 +90,12 @@ const InnerRenderComponent: React.FC<{
                 break
               }
               case 'script':
-                try {
-                  const run = new Function('e', 'dispatch', 'setVariable', 'variables', action.config.code)
-                  run(e, dispatch, setVariable, variables)
-                } catch(err) {
-                  console.error('脚本执行错误：', err)
-                }
+                executeScript(action.config.code, { 
+                  e, 
+                  dispatch, 
+                  setVariable, 
+                  variables 
+                })
                 break
               default:
                 console.warn('未知的动作类型：', action.type)

@@ -82,6 +82,31 @@ function App() {
   // 开启自动保存
   useAutoSave();
 
+  // 键盘快捷键 (Undo/Redo)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 检查 Input/Textarea 焦点，避免误触
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          dispatch(ActionCreators.redo());
+        } else {
+          dispatch(ActionCreators.undo());
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        dispatch(ActionCreators.redo());
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [dispatch]);
+
   // 计算受拖拽影响的组件 ID 集合 (自己 + 祖先)
   // 这些组件需要重渲染，以便透传高亮状态给子组件
   const involvedIds = useMemo(() => {
@@ -143,6 +168,18 @@ function App() {
                 minHeight: '100px',
                 borderRadius: '4px',
                 backgroundColor: '#fff'
+             }
+        } else if (type === 'Table') {
+             newComponent.props = { 
+               columns: [
+                 { title: '姓名', dataIndex: 'name', key: 'name' },
+                 { title: '年龄', dataIndex: 'age', key: 'age' },
+                 { title: '职位', dataIndex: 'job', key: 'job' }
+               ],
+               dataSource: [
+                 { id: '1', name: '张三', age: 32, job: '前端开发' },
+                 { id: '2', name: '李四', age: 28, job: '产品经理' }
+               ]
              }
         }
 

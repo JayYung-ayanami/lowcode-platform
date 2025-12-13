@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react"
 
-export type ComponentType = 'Page' | 'Container' | 'Button' | 'Text' | 'Input'
+export type ComponentType = 'Page' | 'Container' | 'Button' | 'Text' | 'Input' | 'Table'
 
 export interface EventHandler {
     type: 'openModal' | 'link' | 'script' | 'updateState' | 'setValue'

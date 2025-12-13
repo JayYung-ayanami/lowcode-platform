@@ -33,6 +33,11 @@ export const MaterialPanel: React.FC = () => {
                 <Button block style={{ borderStyle: 'dashed' }}>容器</Button>
             </div>
         </DraggableSource>
+        <DraggableSource type="Table">
+            <div className="material-item">
+                <Button block>表格</Button>
+            </div>
+        </DraggableSource>
       </div>
     </div>
   );

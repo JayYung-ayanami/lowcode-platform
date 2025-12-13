@@ -1,4 +1,4 @@
-import { Button, Input } from 'antd';
+import { Button, Input, Table } from 'antd';
 import React from 'react';
 
 // 组件映射表
@@ -9,5 +9,16 @@ export const ComponentMap: Record<string, React.FC<any>> = {
   Button: ({ children, style, ...props }) => <Button style={style} {...props}>{children}</Button>,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   Input: ({ style, children, ...props }) => <Input style={style} {...props} />,
-  Text: ({ text, fontSize, color, ...props }) => <span style={{ fontSize, color }} {...props}>{text}</span>
+  Text: ({ text, fontSize, color, ...props }) => <span style={{ fontSize, color }} {...props}>{text}</span>,
+  Table: ({ style, ...props }) => (
+    <div style={style}>
+      <Table 
+        pagination={false} 
+        size="small" 
+        columns={props.columns || []} 
+        dataSource={props.dataSource || []} 
+        rowKey="id"
+      />
+    </div>
+  )
 };

@@ -1,5 +1,5 @@
 import { Button, Modal, Popconfirm, message, Spin, Tag } from 'antd';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ActionCreators } from 'redux-undo';
 import './App.css'
@@ -52,25 +52,23 @@ const getAncestors = (nodeMap: Record<string, { parentId: string | null }>, id: 
   return ancestors;
 }
 
-// 主应用
 function App() {
-  // Redux: 获取 dispatch 用于触发 action
   const dispatch = useAppDispatch();
-  // Redux: 获取当前页面数据
   const page = useAppSelector((state) => state.project.present.page);
-  // Redux: 获取 nodeMap 用于快速计算祖先路径
   const nodeMap = useAppSelector((state) => state.project.present.nodeMap);
 
-  // Dnd: 当前正在拖拽的组件 ID (active)
   const [activeId, setActiveId] = useState<string | null>(null);
-  // Dnd: 当前拖拽经过的组件 ID (over)
   const [overId, setOverId] = useState<string | null>(null); 
   const [code, setCode] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false); 
   const [loading, setLoading] = useState(true);
+  const initialized = useRef(false);
 
   // 初始化加载
   useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
     projectStorage.loadProject().then((loadedPage) => {
         if (loadedPage) {
             dispatch(loadProject(loadedPage));
@@ -84,7 +82,7 @@ function App() {
   // 开启自动保存
   useAutoSave();
 
-  // 【优化】计算受拖拽影响的组件 ID 集合 (自己 + 祖先)
+  // 计算受拖拽影响的组件 ID 集合 (自己 + 祖先)
   // 这些组件需要重渲染，以便透传高亮状态给子组件
   const involvedIds = useMemo(() => {
       const activeAncestors = getAncestors(nodeMap, activeId);
@@ -103,8 +101,6 @@ function App() {
     const { over } = event;
     setOverId(over ? String(over.id) : null);
   };
-  
-  // ... (return 里的 CanvasPanel 部分修改) ...
   
         {/* 中间：画布 */}
         {/* 将 involvedIds 传给 CanvasPanel */}

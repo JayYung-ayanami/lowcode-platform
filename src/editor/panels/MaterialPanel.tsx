@@ -1,6 +1,6 @@
 import React from 'react';
 import { DraggableSource } from '../materials/DraggableSource';
-import { Button, Card, Typography } from 'antd';
+import { Button, Typography } from 'antd';
 
 const { Title, Text } = Typography;
 

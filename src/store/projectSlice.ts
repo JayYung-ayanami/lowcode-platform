@@ -154,6 +154,11 @@ export const projectSlice = createSlice({
             state.variables = initialState.variables
             state.nodeMap = buildNodeMap(initialPage.root)
         },
+        loadProject: (state, action: PayloadAction<PageSchema>) => {
+            state.page = action.payload
+            state.selectedId = null
+            state.nodeMap = buildNodeMap(action.payload.root)
+        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setVariable: (state, action: PayloadAction<{ key: string; value: any }>) => {
             const { key, value } = action.payload
@@ -172,6 +177,7 @@ export const {
     reorderComponents,
     moveComponentToNewParent,
     resetProject,
+    loadProject,
     setVariable
 } = projectSlice.actions
 export default projectSlice.reducer

@@ -20,6 +20,7 @@
     "@reduxjs/toolkit": "^2.11.0",
     "antd": "^6.0.0",
     "classnames": "^2.5.1",
+    "idb": "^8.0.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-redux": "^9.2.0",

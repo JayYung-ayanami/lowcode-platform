@@ -1,5 +1,5 @@
-import { Button, Modal, Popconfirm, message } from 'antd';
-import { useState } from 'react';
+import { Button, Modal, Popconfirm, message, Spin, Tag } from 'antd';
+import { useState, useEffect } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ActionCreators } from 'redux-undo';
 import './App.css'
@@ -18,7 +18,7 @@ import {
 // Store & Types
 import { useAppSelector, useAppDispatch } from './store/hook';
 import type { ComponentSchema, ComponentType } from './types/schema';
-import { addComponent, reorderComponents, moveComponentToNewParent, resetProject } from './store/projectSlice';
+import { addComponent, reorderComponents, moveComponentToNewParent, resetProject, loadProject } from './store/projectSlice';
 // Panels
 import { MaterialPanel } from './editor/panels/MaterialPanel';
 import { CanvasPanel } from './editor/panels/CanvasPanel';
@@ -27,6 +27,9 @@ import { SettingPanel } from './editor/panels/SettingPanel';
 import { findNode, findParentAndIndex } from './utils/treeUtils';
 import { generatePageCode } from './utils/codegen';
 import { useMemo } from 'react';
+// Storage
+import { projectStorage } from './utils/storage';
+import { useAutoSave } from './hooks/useAutoSave';
 
 // 辅助函数：根据 ID 回溯所有祖先 ID (包含自己)
 const getAncestors = (nodeMap: Record<string, { parentId: string | null }>, id: string | null): Set<string> => {
@@ -64,6 +67,22 @@ function App() {
   const [overId, setOverId] = useState<string | null>(null); 
   const [code, setCode] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [loading, setLoading] = useState(true);
+
+  // 初始化加载
+  useEffect(() => {
+    projectStorage.loadProject().then((loadedPage) => {
+        if (loadedPage) {
+            dispatch(loadProject(loadedPage));
+            message.success('已恢复上次编辑的工程');
+        }
+    }).finally(() => {
+        setLoading(false);
+    });
+  }, [dispatch]);
+
+  // 开启自动保存
+  useAutoSave();
 
   // 【优化】计算受拖拽影响的组件 ID 集合 (自己 + 祖先)
   // 这些组件需要重渲染，以便透传高亮状态给子组件
@@ -274,9 +293,12 @@ function App() {
   return (
     <div className="app">
       {/* 顶部导航 */}
-      <div className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' }}>
-        <div>LowCode Engine</div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+      <div className="header">
+        <div className="header-title">
+            <span>LowCode Engine</span>
+            <Tag color="success" style={{ margin: 0 }}>自动保存开启</Tag>
+        </div>
+        <div className="header-actions">
           <Button onClick={() => dispatch(ActionCreators.undo())}>
             撤销
           </Button>
@@ -286,7 +308,10 @@ function App() {
           <Popconfirm
             title="确认清空画布？"
             description="此操作将删除所有组件，且不可恢复（除非使用撤销）。"
-            onConfirm={() => dispatch(resetProject())}
+            onConfirm={() => {
+                dispatch(resetProject());
+                projectStorage.clearProject();
+            }}
             okText="确定"
             cancelText="取消"
           >
@@ -297,6 +322,7 @@ function App() {
       </div>
 
       {/* 主体三栏布局 */}
+      <Spin spinning={loading} tip="正在加载工程...">
       <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={rectIntersection}>
       <div className="editor-container">
         
@@ -318,6 +344,7 @@ function App() {
         ) : null}
       </DragOverlay>
       </DndContext>
+      </Spin>
       
       <Modal
         title="生成的源代码"

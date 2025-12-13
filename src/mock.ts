@@ -40,7 +40,17 @@ export const initialPage: PageSchema = {
                             type: 'primary',
                             children: '点击我'
                         },
-                        style: { marginTop: '20px' }
+                        style: { marginTop: '20px' },
+                        events: {
+                            onClick: [
+                                {
+                                    type: 'script',
+                                    config: {
+                                        code: "alert('Hello from Sandbox! Current text is: ' + variables.text)"
+                                    }
+                                }
+                            ]
+                        }
                     }
                 ]
             }

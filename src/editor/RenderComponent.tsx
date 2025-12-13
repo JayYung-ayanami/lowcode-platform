@@ -26,7 +26,7 @@ const InnerRenderComponent: React.FC<{
     isSortable?: boolean;
     overId?: string | null;
     activeId?: string | null;
-    involvedIds?: Set<string>; // 【新增】受影响的组件 ID 集合
+    involvedIds?: Set<string>;
 }> = ({ schema, isSortable, overId, activeId, involvedIds }) => {
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.present.selectedId);
@@ -178,7 +178,6 @@ const InnerRenderComponent: React.FC<{
   // 判断当前组件是否正是被拖拽的那个
   const isDragging = activeId === schema.id;
 
-  // 选中高亮样式
   const isSelected = selectedId === schema.id;
   const outlineStyle = isSelected 
     ? { outline: '2px solid #1890ff', position: 'relative' as const, zIndex: 1, cursor: 'pointer' } 
@@ -265,7 +264,7 @@ const InnerRenderComponent: React.FC<{
       ) : (
         // 3.普通组件
         <Component style={schema.style} {...schema.props}>
-          {children}
+          {children || finalProps.children}
         </Component>
       )}
     </div>

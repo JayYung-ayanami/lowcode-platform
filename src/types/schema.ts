@@ -12,7 +12,6 @@ export interface ComponentSchema {
     id: string
     type: ComponentType
     name: string
-    /** 组件属性，使用 Record<string, any> 以支持不同组件的异构属性 */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     props: Record<string, any>
     style?: CSSProperties

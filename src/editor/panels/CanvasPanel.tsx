@@ -3,7 +3,6 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAppSelector } from '../../store/hook';
 import { RenderComponent } from '../RenderComponent';
-
 import { ShadowSandbox } from '../components/ShadowSandbox';
 
 // 画布区域组件

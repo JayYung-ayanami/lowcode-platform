@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { PageSchema, ComponentSchema } from '../types/schema'
+import type { PageSchema, ComponentSchema, EventHandler } from '../types/schema'
 import { initialPage } from '../mock'
 import { findNode } from '../utils/treeUtils'
 
@@ -82,6 +82,13 @@ export const projectSlice = createSlice({
                 node.props = { ...node.props, ...props }
             }
         },
+        updateComponentEvents: (state, action: PayloadAction<{ id: string; events: Record<string, EventHandler[]> }>) => {
+            const { id, events } = action.payload
+            const node = findNode(state.page.root, id)
+            if (node) {
+                node.events = events
+            }
+        },
         deleteComponent: (state, action: PayloadAction<string>) => {
             const id = action.payload
             
@@ -158,7 +165,8 @@ export const projectSlice = createSlice({
 export const { 
     setPageTitle, 
     setSelectedId, 
-    updateComponentProps, 
+    updateComponentProps,
+    updateComponentEvents,
     addComponent, 
     deleteComponent, 
     reorderComponents,

@@ -1,4 +1,4 @@
-import { Button, Modal, Popconfirm } from 'antd';
+import { Button, Modal, Popconfirm, message } from 'antd';
 import { useState } from 'react';
 import { v4 as uuid } from 'uuid';
 import { ActionCreators } from 'redux-undo';
@@ -253,6 +253,12 @@ function App() {
     setIsModalOpen(true)
   }
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+        message.success('代码已复制到剪贴板');
+    });
+  };
+
   // 配置 dnd-kit 的传感器
   // PointerSensor 是最通用的传感器，同时支持鼠标和触摸
   const sensors = useSensors(
@@ -317,7 +323,10 @@ function App() {
         title="生成的源代码"
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
-        footer={null}
+        footer={[
+             <Button key="copy" onClick={handleCopy}>复制全部</Button>,
+             <Button key="close" type="primary" onClick={() => setIsModalOpen(false)}>关闭</Button>
+        ]}
         width={800}
       >
         <pre style={{ maxHeight: '600px', overflow: 'auto', background: '#f5f5f5', padding: '20px', borderRadius: '4px' }}>

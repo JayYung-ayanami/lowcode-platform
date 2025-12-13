@@ -27,10 +27,19 @@ export const initialPage: PageSchema = {
                         type: 'Text',
                         name: '标题文本',
                         props: {
-                            text: 'Hello Tencent!',
+                            text: 'Hello User!',
                             fontSize: '24px',
                             color: '#1890ff'
                         }
+                    },
+                    {
+                        id: 'input_name',
+                        type: 'Input',
+                        name: '姓名输入框',
+                        props: {
+                            placeholder: '等待填充数据...'
+                        },
+                        style: { marginTop: '20px', display: 'block', width: '300px' }
                     },
                     {
                         id: '3',
@@ -38,15 +47,16 @@ export const initialPage: PageSchema = {
                         name: '提交按钮',
                         props: {
                             type: 'primary',
-                            children: '点击我'
+                            children: '点击填充数据'
                         },
                         style: { marginTop: '20px' },
                         events: {
                             onClick: [
                                 {
-                                    type: 'script',
+                                    type: 'setValue',
                                     config: {
-                                        code: "alert('Hello from Sandbox! Current text is: ' + variables.text)"
+                                        targetId: 'input_name',
+                                        value: 'User 2025'
                                     }
                                 }
                             ]

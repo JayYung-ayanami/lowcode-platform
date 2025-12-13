@@ -2,7 +2,7 @@ import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAppDispatch, useAppSelector } from '../store/hook';
-import { setSelectedId, setVariable } from '../store/projectSlice';
+import { setSelectedId, setVariable, updateComponentProps } from '../store/projectSlice';
 import type { ComponentSchema } from '../types/schema';
 import { executeScript } from '../utils/sandbox';
 import { SortableItem } from './materials/SortableItem';
@@ -86,6 +86,16 @@ const InnerRenderComponent: React.FC<{
                 }
                 if (action.config.key) {
                   dispatch(setVariable({ key: action.config.key, value: val }))
+                }
+                break
+              }
+              case 'setValue': {
+                // 实现简单的组件联动：修改目标组件的 value 属性
+                if (action.config.targetId) {
+                  dispatch(updateComponentProps({
+                    id: action.config.targetId,
+                    props: { value: action.config.value }
+                  }))
                 }
                 break
               }

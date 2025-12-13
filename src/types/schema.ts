@@ -3,7 +3,7 @@ import type { CSSProperties } from "react"
 export type ComponentType = 'Page' | 'Container' | 'Button' | 'Text' | 'Input'
 
 export interface EventHandler {
-    type: 'openModal' | 'link' | 'script' | 'updateState'
+    type: 'openModal' | 'link' | 'script' | 'updateState' | 'setValue'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     config: Record<string, any>
 }

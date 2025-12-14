@@ -30,6 +30,8 @@ import { useMemo } from 'react';
 // Storage
 import { projectStorage } from './utils/storage';
 import { useAutoSave } from './hooks/useAutoSave';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { PerformanceMonitor } from './components/PerformanceMonitor';
 
 // 辅助函数：根据 ID 回溯所有祖先 ID (包含自己)
 const getAncestors = (nodeMap: Record<string, { parentId: string | null }>, id: string | null): Set<string> => {
@@ -62,6 +64,7 @@ function App() {
   const [code, setCode] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false); 
   const [loading, setLoading] = useState(true);
+  const [showPerformance, setShowPerformance] = useState(true);
   const initialized = useRef(false);
 
   // 初始化加载
@@ -181,6 +184,36 @@ function App() {
                  { id: '2', name: '李四', age: 28, job: '产品经理' }
                ]
              }
+        } else if (type === 'Card') {
+             newComponent.props = { title: '卡片标题' }
+             newComponent.style = { width: '100%', marginBottom: '16px' }
+             newComponent.children = []
+        } else if (type === 'Select') {
+             newComponent.props = { 
+               placeholder: '请选择',
+               options: [
+                 { label: '选项1', value: '1' },
+                 { label: '选项2', value: '2' },
+                 { label: '选项3', value: '3' }
+               ]
+             }
+             newComponent.style = { width: '200px' }
+        } else if (type === 'Form') {
+             newComponent.props = { layout: 'vertical' }
+             newComponent.children = []
+        } else if (type === 'FormItem') {
+             newComponent.props = { label: '表单项', name: 'field' }
+             newComponent.children = []
+        } else if (type === 'Modal') {
+             newComponent.props = { title: '弹窗标题', visible: false }
+             newComponent.children = []
+        } else if (type === 'Divider') {
+             newComponent.props = { text: '分割线', orientation: 'center' }
+        } else if (type === 'Space') {
+             newComponent.props = { direction: 'horizontal', size: 'small' }
+             newComponent.children = []
+        } else if (type === 'Tag') {
+             newComponent.props = { text: '标签', color: 'blue' }
         }
 
         // 1.2 确定插入位置
@@ -311,6 +344,48 @@ function App() {
     });
   };
 
+  // 导出 JSON Schema
+  const handleExportSchema = () => {
+    const schemaJson = JSON.stringify(page, null, 2);
+    const blob = new Blob([schemaJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${page.title || 'page'}-schema-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success('Schema 已导出');
+  };
+
+  // 导入 JSON Schema
+  const handleImportSchema = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const schema = JSON.parse(event.target?.result as string);
+          // 简单验证
+          if (!schema.root || !schema.title) {
+            throw new Error('Invalid schema format');
+          }
+          dispatch(loadProject(schema));
+          message.success('Schema 已导入');
+        } catch (err) {
+          message.error('导入失败：文件格式不正确');
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   // 配置 dnd-kit 的传感器
   // PointerSensor 是最通用的传感器，同时支持鼠标和触摸
   const sensors = useSensors(
@@ -330,6 +405,14 @@ function App() {
         <div className="header-title">
             <span>LowCode Engine</span>
             <Tag color="success" style={{ margin: 0 }}>自动保存开启</Tag>
+            <Button 
+              size="small" 
+              type={showPerformance ? 'primary' : 'default'}
+              onClick={() => setShowPerformance(!showPerformance)}
+              style={{ marginLeft: 8 }}
+            >
+              {showPerformance ? '隐藏' : '显示'}性能监控
+            </Button>
         </div>
         <div className="header-actions">
           <Button onClick={() => dispatch(ActionCreators.undo())}>
@@ -337,6 +420,12 @@ function App() {
           </Button>
           <Button onClick={() => dispatch(ActionCreators.redo())}>
             重做
+          </Button>
+          <Button onClick={handleExportSchema}>
+            导出 Schema
+          </Button>
+          <Button onClick={handleImportSchema}>
+            导入 Schema
           </Button>
           <Popconfirm
             title="确认清空画布？"
@@ -356,6 +445,7 @@ function App() {
 
       {/* 主体三栏布局 */}
       <Spin spinning={loading} tip="正在加载工程...">
+      <ErrorBoundary>
       <DndContext onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={rectIntersection}>
       <div className="editor-container">
         
@@ -371,12 +461,13 @@ function App() {
       </div>
       <DragOverlay>
         {activeId && !activeId.startsWith('new-') ? (
-            <div style={{ padding: '8px 16px', border: '2px solid #1890ff', background: '#fff', borderRadius: '4px', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', pointerEvents: 'none' }}>
-                拖拽中...
+            <div className="drag-overlay-content">
+                🎯 拖拽中...
             </div>
         ) : null}
       </DragOverlay>
       </DndContext>
+      </ErrorBoundary>
       </Spin>
       
       <Modal
@@ -393,6 +484,9 @@ function App() {
           {code}
         </pre>
       </Modal>
+
+      {/* 性能监控面板 */}
+      <PerformanceMonitor visible={showPerformance} />
     </div>
   );
 }

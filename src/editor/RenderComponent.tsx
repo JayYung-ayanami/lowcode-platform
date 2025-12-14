@@ -31,7 +31,7 @@ const InnerRenderComponent: React.FC<{
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.present.selectedId);
   const variables = useAppSelector(state => state.project.present.variables);
-  const isContainer = schema.type === 'Container';
+  const isContainer = ['Container', 'Card', 'Form', 'FormItem', 'Space', 'Modal'].includes(schema.type);
   const hasChildren = schema.children && schema.children.length > 0;
   
   // Dnd-kit 拖拽相关逻辑

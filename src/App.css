@@ -10,6 +10,8 @@
   --text-primary: #1f1f1f;
   --text-secondary: #8c8c8c;
   --border-color: #f0f0f0;
+  --drag-highlight: #1677ff;
+  --drag-highlight-bg: rgba(22, 119, 255, 0.05);
 }
 
 * {
@@ -71,6 +73,7 @@ html, body, #root, .app {
   height: 100%;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
   z-index: 10;
+  overflow-y: auto;
 }
 
 .panel-title {
@@ -84,12 +87,18 @@ html, body, #root, .app {
 }
 
 .material-item {
-  /* 可以在这里添加 hover 效果 */
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: grab;
 }
 
 .material-item:hover {
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.material-item:active {
+  cursor: grabbing;
+  transform: scale(0.98);
 }
 
 /* 中间画布区 */
@@ -104,13 +113,14 @@ html, body, #root, .app {
   /* 点状网格背景 */
   background-image: radial-gradient(#d9d9d9 1px, transparent 1px);
   background-size: 20px 20px;
+  background-attachment: local;
 }
 
 /* 真正的画布 */
 .canvas-paper {
   background: white;
   width: 100%;
-  max-width: 960px; /* 加宽一点 */
+  max-width: 960px;
   min-height: 800px;
   /* 悬浮阴影 */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
@@ -118,6 +128,39 @@ html, body, #root, .app {
   border-radius: 8px;
   transition: all 0.3s ease;
   margin: 0 auto;
+}
+
+/* 拖拽时的视觉反馈增强 */
+.canvas-paper.dragging-over {
+  box-shadow: 0 8px 32px rgba(22, 119, 255, 0.2);
+  border: 2px dashed var(--drag-highlight);
+}
+
+/* 组件拖拽高亮动画 */
+@keyframes dragPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(22, 119, 255, 0);
+  }
+}
+
+.component-drag-over {
+  animation: dragPulse 1.5s infinite;
+}
+
+/* 空容器拖拽提示优化 */
+.empty-container-hint {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px dashed #d9d9d9;
+  border-radius: 4px;
+}
+
+.empty-container-hint.active {
+  border-color: var(--drag-highlight);
+  background: var(--drag-highlight-bg);
+  border-style: solid;
 }
 
 /* 右侧配置区 */
@@ -154,10 +197,35 @@ html, body, #root, .app {
 ::-webkit-scrollbar-thumb {
   background: #ccc;
   border-radius: 3px;
+  transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #999;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* 拖拽叠加层优化 */
+.drag-overlay-content {
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid var(--drag-highlight);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-weight: 500;
+  color: var(--drag-highlight);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: dragFloat 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes dragFloat {
+  from {
+    transform: translateY(0px);
+  }
+  to {
+    transform: translateY(-4px);
+  }
 }

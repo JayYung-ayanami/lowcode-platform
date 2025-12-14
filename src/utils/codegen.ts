@@ -77,23 +77,122 @@ const createJSXElement = (node: ComponentSchema): t.JSXElement => {
   return t.jsxElement(openingElement, closingElement, childrenNodes, childrenNodes.length === 0)
 }
 
+// 递归收集所有使用到的组件类型
+const collectImports = (node: ComponentSchema, imports: Set<string>) => {
+  imports.add(node.type);
+  if (node.children) {
+    node.children.forEach(child => collectImports(child, imports));
+  }
+}
+
+// 生成辅助组件定义 AST
+const generateHelperComponents = (usedTypes: Set<string>): t.Statement[] => {
+  const helpers: t.Statement[] = []
+
+  // const Container = ({children, style, ...props}) => <div style={style} {...props}>{children}</div>
+  if (usedTypes.has('Container')) {
+    // 简化版：const Container = (props) => <div {...props} />
+    // 为了兼容 style 和 children，直接透传 props 即可，react 会处理 children
+    const containerAst = t.variableDeclaration('const', [
+      t.variableDeclarator(
+        t.identifier('Container'),
+        t.arrowFunctionExpression(
+            [t.identifier('props')],
+            t.jsxElement(
+                t.jsxOpeningElement(
+                    t.jsxIdentifier('div'), 
+                    [t.jsxSpreadAttribute(t.identifier('props'))],
+                    false
+                ),
+                t.jsxClosingElement(t.jsxIdentifier('div')),
+                [t.jsxExpressionContainer(t.memberExpression(t.identifier('props'), t.identifier('children')))]
+            )
+        )
+      )
+    ])
+    helpers.push(containerAst)
+  }
+
+  // const Text = ({text, style, ...props}) => <span style={style} {...props}>{text}</span>
+  if (usedTypes.has('Text')) {
+    const textAst = t.variableDeclaration('const', [
+        t.variableDeclarator(
+          t.identifier('Text'),
+          t.arrowFunctionExpression(
+              [
+                t.objectPattern([
+                  t.objectProperty(t.identifier('text'), t.identifier('text'), false, true),
+                  t.restElement(t.identifier('props'))
+                ])
+              ],
+              t.jsxElement(
+                  t.jsxOpeningElement(
+                      t.jsxIdentifier('span'), 
+                      [t.jsxSpreadAttribute(t.identifier('props'))],
+                      false
+                  ),
+                  t.jsxClosingElement(t.jsxIdentifier('span')),
+                  [t.jsxExpressionContainer(t.identifier('text'))]
+              )
+          )
+        )
+      ])
+      helpers.push(textAst)
+  }
+
+  // const FormItem = Form.Item;
+  if (usedTypes.has('FormItem')) {
+    const formItemAst = t.variableDeclaration('const', [
+        t.variableDeclarator(
+            t.identifier('FormItem'),
+            t.memberExpression(t.identifier('Form'), t.identifier('Item'))
+        )
+    ])
+    helpers.push(formItemAst)
+  }
+
+  return helpers
+}
+
 export const generatePageCode = (page: PageSchema): string => {
-  const ast = t.file(
-    t.program([
+  // 1. 依赖收集
+  const usedTypes = new Set<string>()
+  collectImports(page.root, usedTypes)
+
+  // 2. 过滤 Antd 组件
+  const ANTD_COMPONENTS = ['Button', 'Input', 'Table', 'Card', 'Select', 'Form', 'Modal', 'Divider', 'Space', 'Tag']
+  const antdImports = Array.from(usedTypes).filter(type => ANTD_COMPONENTS.includes(type))
+  
+  // 特殊处理：如果用了 FormItem，必须导入 Form
+  if (usedTypes.has('FormItem') && !antdImports.includes('Form')) {
+    antdImports.push('Form')
+  }
+
+  // 3. 构建 AST
+  const programBody: t.Statement[] = [
       t.importDeclaration(
         [t.importDefaultSpecifier(t.identifier('React'))],
         t.stringLiteral('react')
-      ),
-      t.importDeclaration(
-        [
-          t.importSpecifier(t.identifier('Button'), t.identifier('Button')),
-          t.importSpecifier(t.identifier('Input'), t.identifier('Input')),
-          t.importSpecifier(t.identifier('Card'), t.identifier('Card')),
-        ],
-        t.stringLiteral('antd')
-      ),
-      // 3. export default function GeneratedPage() { ... }
-      t.exportDefaultDeclaration(
+      )
+  ]
+
+  // 添加 Antd Imports
+  if (antdImports.length > 0) {
+      programBody.push(
+        t.importDeclaration(
+            antdImports.map(name => t.importSpecifier(t.identifier(name), t.identifier(name))),
+            t.stringLiteral('antd')
+        )
+      )
+  }
+
+  // 添加 Helper Components 定义
+  const helperComponents = generateHelperComponents(usedTypes)
+  programBody.push(...helperComponents)
+
+  // 添加主组件
+  programBody.push(
+    t.exportDefaultDeclaration(
         t.functionDeclaration(
           t.identifier('GeneratedPage'),
           [],
@@ -120,8 +219,9 @@ export const generatePageCode = (page: PageSchema): string => {
           ])
         )
       )
-    ])
   )
+
+  const ast = t.file(t.program(programBody))
 
   const output = generate(ast, { 
     jsescOption: { minimal: true },

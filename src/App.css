@@ -58,7 +58,8 @@ html, body, #root, .app {
 /* 核心编辑器区域 */
 .editor-container {
   display: flex;
-  height: calc(100% - var(--header-height));
+  /* 使用视口高度，避免被 Spin/ErrorBoundary 等包裹层导致 100% 无法计算，从而无法滚动 */
+  height: calc(100vh - var(--header-height));
   background-color: var(--canvas-bg);
 }
 
@@ -73,7 +74,16 @@ html, body, #root, .app {
   height: 100%;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
   z-index: 10;
+  overflow: hidden; /* 防止整体滚动，改为内部滚动 */
+}
+
+/* 物料列表滚动区 */
+.material-scroll-area {
+  flex: 1;
   overflow-y: auto;
+  margin-top: 16px; /* 替代原来的 margin-top */
+  /* 隐藏滚动条但保留功能 */
+  scrollbar-width: thin; 
 }
 
 .panel-title {
@@ -122,6 +132,7 @@ html, body, #root, .app {
   width: 100%;
   max-width: 960px;
   min-height: 800px;
+  height: max-content; /* 再次修正，尝试 max-content */
   /* 悬浮阴影 */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
   position: relative;

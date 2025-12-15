@@ -53,12 +53,12 @@ export const ShadowSandbox: React.FC<ShadowSandboxProps> = ({
     <div
       ref={hostRef}
       className={className}
-      style={{ width: '100%', height: '100%', ...style }}
+      style={{ width: '100%', ...style }}
     >
       {shadowRoot && createPortal(
         // 为了防止 body { display: none } 等全局样式影响，
         // 在 Shadow DOM 内部再包一层 div 作为"虚拟 body"
-        <div className="sandbox-body" style={{ height: '100%', overflow: 'auto' }}>
+        <div className="sandbox-body" style={{ minHeight: '100%' }}>
             {children}
         </div>, 
         shadowRoot as unknown as Element

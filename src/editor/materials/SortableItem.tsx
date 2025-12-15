@@ -29,7 +29,8 @@ export const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
         transform: CSS.Transform.toString(transform), // 将transform对象转换为CSS字符串
         transition, // 应用过度效果，让位置交换看起来更平滑
         opacity: isDragging ? 0.5 : 1, // 如果正在被拖拽，降低透明度，提供视觉反馈
-        touchAction: 'none' // 关键：禁用浏览器默认的触摸滚动行为，防止拖拽时触发页面滚动
+        // 允许画布正常滚动；仅在“真正拖拽中”再禁用默认滚动，避免拖拽过程页面跟着跑
+        touchAction: isDragging ? 'none' : 'pan-y'
     }
 
     return (

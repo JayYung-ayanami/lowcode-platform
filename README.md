@@ -104,10 +104,10 @@ npm run preview
 
 项目包含完善的单元测试和集成测试：
 
-- ✅ Redux Store 测试（projectSlice.test.ts）
-- ✅ 代码生成测试（codegen.test.ts）
-- ✅ 组件渲染测试（RenderComponent.test.tsx）
-- ✅ 沙箱安全性测试（sandbox.test.ts）
+- Redux Store 测试（projectSlice.test.ts）
+- 代码生成测试（codegen.test.ts）
+- 组件渲染测试（RenderComponent.test.tsx）
+- 沙箱安全性测试（sandbox.test.ts）
 
 ```bash
 # 运行所有测试
@@ -144,10 +144,10 @@ npm run test -- --coverage
 
 ## 项目亮点
 
-✅ **技术深度**：AST 代码生成、Shadow DOM 隔离、JS 沙箱  
-✅ **架构设计**：Redux 时间旅行、错误边界、性能监控  
-✅ **工程化**：TypeScript 全覆盖、Vitest 测试、ESLint 规范  
-✅ **用户体验**：拖拽动画、自动保存、快捷键支持
+**技术深度**：AST 代码生成、Shadow DOM 隔离、JS 沙箱  
+**架构设计**：Redux 时间旅行、错误边界、性能监控  
+**工程化**：TypeScript 全覆盖、Vitest 测试、ESLint 规范  
+**用户体验**：拖拽动画、自动保存、快捷键支持
 
 
 *Created by [JayYung-ayanami]*  

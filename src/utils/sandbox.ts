@@ -8,17 +8,15 @@ const GLOBAL_WHITELIST = new Set([
     'parseFloat',
     'setTimeout',
     'setInterval',
-    'alert' // 开发阶段暂时放开，生产环境建议禁用
+    'alert'
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const executeScript = (code: string, context: Record<string, any>) => {
     // 构造沙箱代理对象
     const proxyContext = new Proxy(context, {
-        // 拦截 'in' 操作符和 with 语句的变量查找
-        // 只要返回 true，with 块内的变量查找就会被限制在 proxy 中，而不会向上查找全局作用域
+        // 拦截变量查找：配合with语句，强制所有变量访问都经过沙箱，防止逃逸到全局作用域
         has(target, key: string | symbol) {
-            // 除非是白名单里的全局对象，否则都声称“我有”，把查找拦截下来
             if (typeof key === 'string' && GLOBAL_WHITELIST.has(key)) {
                 return Object.prototype.hasOwnProperty.call(target, key);
             }
@@ -56,13 +54,13 @@ export const executeScript = (code: string, context: Record<string, any>) => {
                 try {
                     ${code}
                 } catch (e) {
-                    console.error('User Script Error:', e);
+                    console.error('用户脚本错误：', e);
                 }
             }
         `);
         
         sandbox(proxyContext);
     } catch (err) {
-        console.error('Sandbox Execution Error:', err);
+        console.error('沙箱执行错误：', err);
     }
 }

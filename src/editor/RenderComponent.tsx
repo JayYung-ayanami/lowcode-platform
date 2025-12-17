@@ -8,6 +8,7 @@ import { executeScript } from '../utils/sandbox';
 import { SortableItem } from './materials/SortableItem';
 import { ComponentMap } from './componentMap';
 
+// 解析表达式：从字符串中提取变量名，并从variables中获取对应值
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const parseExpression = (str: any, variables: Record<string, any>) => {
   if (typeof str === 'string' && str.startsWith('{{') && str.endsWith('}}')) {
@@ -20,7 +21,7 @@ const parseExpression = (str: any, variables: Record<string, any>) => {
   return str
 }
 
-// InnerRenderComponent 的 Props 定义增加 involvedIds
+// 渲染组件的核心逻辑：根据组件类型和属性，渲染组件内容
 const InnerRenderComponent: React.FC<{ 
     schema: ComponentSchema; 
     isSortable?: boolean;
@@ -35,16 +36,19 @@ const InnerRenderComponent: React.FC<{
   const hasChildren = schema.children && schema.children.length > 0;
   
   // Dnd-kit 拖拽相关逻辑
+  // 主容器可投放区
   const { setNodeRef } = useDroppable({
     id: `${schema.id}-drop`, 
     disabled: !isContainer,
     data: { isContainer: true, containerId: schema.id, type: schema.type }
   })
+  // 容器底部插入区
   const { setNodeRef: setEndZoneRef } = useDroppable({
     id: `${schema.id}-end`,
     disabled: !isContainer || !hasChildren,
     data: { isContainerEnd: true, containerId: schema.id }
   })
+  // 空容器可投放区
   const { setNodeRef: setEmptyDropRef } = useDroppable({
     id: `${schema.id}-empty`,
     disabled: !isContainer || hasChildren,
@@ -53,6 +57,7 @@ const InnerRenderComponent: React.FC<{
   
   const Component = ComponentMap[schema.type];
 
+  // 解析组件属性：将字符串表达式转换为实际值
   const resolvedProps = React.useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const newProps: Record<string, any> = {}
@@ -90,7 +95,6 @@ const InnerRenderComponent: React.FC<{
                 break
               }
               case 'setValue': {
-                // 实现简单的组件联动：修改目标组件的 value 属性
                 if (action.config.targetId) {
                   dispatch(updateComponentProps({
                     id: action.config.targetId,
@@ -124,6 +128,7 @@ const InnerRenderComponent: React.FC<{
     style: schema.style
   }
 
+  // 遵循 React Hooks 规则：必须在所有 Hook 执行完毕后才能进行条件判断和提前返回
   if (!Component) {
     return <div>未知组件类型：{schema.type}</div>;
   }
@@ -139,14 +144,14 @@ const InnerRenderComponent: React.FC<{
     />
   ))
 
-  // 构建排序环境
   // 如果有子元素，就需要把它们包裹在SortableContext里，以便支持拖拽排序
   const children = (schema.children && schema.children.length > 0) ? (
     <>
       <SortableContext items={schema.children.map(c => c.id)} strategy={verticalListSortingStrategy}>
         {childrenContent}
       </SortableContext>
-      {/* 容器底部插入区域 
+      {/* 
+          容器底部插入区域 
           当用户把组件拖到容器的最下方时，这个区域会高亮，松手后追加到列表末尾
       */}
       <div 
@@ -184,10 +189,7 @@ const InnerRenderComponent: React.FC<{
   // 判断当前组件是否是拖拽目标
   // 可能是直接拖到组件上，也可能是拖到了它的drop区域上
   const isOverTarget = overId === schema.id || overId === `${schema.id}-drop`;
-
-  // 判断当前组件是否正是被拖拽的那个
   const isDragging = activeId === schema.id;
-
   const isSelected = selectedId === schema.id;
   const outlineStyle = isSelected 
     ? { outline: '2px solid #1890ff', position: 'relative' as const, zIndex: 1, cursor: 'pointer' } 
@@ -232,16 +234,13 @@ const InnerRenderComponent: React.FC<{
         boxSizing: 'border-box'
       }}
     >
-      {/* 分支渲染逻辑：空容器、非空容器、普通组件 */}
-
-      {/* 1.空容器 */}
       {isContainer && !hasChildren ? (
+        // 1.空容器
         <Component style={schema.style} {...schema.props}>
           {/* 渲染一个大的虚线框占位符 */}
           <div 
             ref={setEmptyDropRef}
             style={{ 
-              // 占位符样式
               minHeight: '80px', 
               display: 'flex', 
               alignItems: 'center', 
@@ -292,8 +291,6 @@ export const RenderComponent = React.memo(InnerRenderComponent, (prevProps, next
   if (prevProps.schema !== nextProps.schema) return false
 
   // 2. 如果拖拽状态（activeId/overId）变了，简单起见，我们允许重渲染
-  // 之前的深度比较逻辑虽然性能好，但容易导致高亮状态更新滞后或遗漏
-  // 尤其是在拖拽快速移动时，或者涉及 transform 位移时
   if (prevProps.overId !== nextProps.overId) return false
   if (prevProps.activeId !== nextProps.activeId) return false
   if (prevProps.involvedIds !== nextProps.involvedIds) return false

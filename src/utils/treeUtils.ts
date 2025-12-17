@@ -23,7 +23,6 @@ export const findParentAndIndex = (node: ComponentSchema, targetId: string): { p
       
       // 递归在子节点的子树里找
       const result = findParentAndIndex(node.children[i], targetId)
-      // 如果在深层找到了，直接返回结果
       if (result) return result
     }
   }

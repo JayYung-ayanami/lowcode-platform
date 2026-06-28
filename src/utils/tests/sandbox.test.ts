@@ -102,5 +102,50 @@ describe('Sandbox Security', () => {
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
+
+  it('should block constructor-based escape (Function constructor)', () => {
+    // 经典逃逸：通过任意对象的 constructor.constructor 拿到 Function 再执行
+    const context = { obj: {}, leaked: false };
+    executeScript('leaked = !!(obj.constructor)', context);
+    // constructor 被拦截返回 undefined，因此 leaked 应为 false
+    expect(context.leaked).toBe(false);
+  });
+
+  it('should block access to Function identifier', () => {
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const context = { out: undefined as unknown };
+    executeScript('out = Function', context);
+    expect(context.out).toBeUndefined();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('should block access to globalThis (rejected before execution)', () => {
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const context = { out: undefined as unknown };
+    executeScript('out = globalThis', context);
+    // 静态分析在执行前拒绝，out 不会被赋值
+    expect(context.out).toBeUndefined();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('should block `this` usage (prevents global leak)', () => {
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const context = { leaked: false };
+    executeScript('leaked = !!(this)', context);
+    // this 被静态分析拒绝，脚本不执行，leaked 保持 false
+    expect(context.leaked).toBe(false);
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('should block __proto__ access', () => {
+    const consoleSpy = vi.spyOn(console, 'warn');
+    const context = { x: {}, out: undefined as unknown };
+    executeScript('out = x.__proto__', context);
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
 });
 

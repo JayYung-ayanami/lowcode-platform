@@ -1,19 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { configureStore } from '@reduxjs/toolkit';
 import { RenderComponent } from '../RenderComponent';
-import projectReducer from '../../store/projectSlice';
+import { createTestStore } from '../../store/testStore';
 import type { ComponentSchema } from '../../types/schema';
-
-// 创建测试用 store
-const createTestStore = () => {
-  return configureStore({
-    reducer: {
-      project: projectReducer
-    }
-  });
-};
 
 describe('RenderComponent', () => {
   it('should render Button component', () => {
@@ -175,6 +165,79 @@ describe('RenderComponent', () => {
     );
 
     expect(screen.getByText('Card Title')).toBeDefined();
+  });
+
+  it('should render custom Progress component (non-antd)', () => {
+    const schema: ComponentSchema = {
+      id: 'prog-1',
+      type: 'Progress',
+      name: 'TestProgress',
+      props: { percent: 73, showInfo: true },
+    };
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <RenderComponent schema={schema} />
+      </Provider>
+    );
+
+    expect(screen.getByText('73%')).toBeDefined();
+  });
+
+  it('should clamp Progress percent over 100', () => {
+    const schema: ComponentSchema = {
+      id: 'prog-2',
+      type: 'Progress',
+      name: 'TestProgress',
+      props: { percent: 250, showInfo: true },
+    };
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <RenderComponent schema={schema} />
+      </Provider>
+    );
+
+    expect(screen.getByText('100%')).toBeDefined();
+  });
+
+  it('should render custom Heading with level', () => {
+    const schema: ComponentSchema = {
+      id: 'h-1',
+      type: 'Heading',
+      name: 'TestHeading',
+      props: { text: '大标题', level: 1 },
+    };
+
+    const store = createTestStore();
+    const { container } = render(
+      <Provider store={store}>
+        <RenderComponent schema={schema} />
+      </Provider>
+    );
+
+    expect(container.querySelector('h1')?.textContent).toBe('大标题');
+  });
+
+  it('should evaluate arithmetic expression with state', () => {
+    const schema: ComponentSchema = {
+      id: 'text-calc',
+      type: 'Text',
+      name: 'CalcText',
+      props: { text: '计数 {{ state.counter + 10 }}' },
+    };
+
+    const store = createTestStore();
+    render(
+      <Provider store={store}>
+        <RenderComponent schema={schema} />
+      </Provider>
+    );
+
+    // 默认 counter = 0，应渲染为 "计数 10"
+    expect(screen.getByText('计数 10')).toBeDefined();
   });
 });
 

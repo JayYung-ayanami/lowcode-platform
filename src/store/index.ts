@@ -16,6 +16,7 @@ export const store = configureStore({
             // 决定哪些操作可以被合并到同一个历史记录中
             groupBy: groupByActionTypes([
                 'project/updateComponentProps',
+                'project/updateComponentStyle',
                 'project/reorderComponents',
                 'project/setVariable'
             ])

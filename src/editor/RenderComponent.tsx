@@ -2,24 +2,12 @@ import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useAppDispatch, useAppSelector } from '../store/hook';
-import { setSelectedId, setVariable, updateComponentProps } from '../store/projectSlice';
+import { setSelectedId } from '../store/projectSlice';
 import type { ComponentSchema } from '../types/schema';
-import { executeScript } from '../utils/sandbox';
 import { SortableItem } from './materials/SortableItem';
-import { ComponentMap } from './componentMap';
-
-// 解析表达式：从字符串中提取变量名，并从variables中获取对应值
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const parseExpression = (str: any, variables: Record<string, any>) => {
-  if (typeof str === 'string' && str.startsWith('{{') && str.endsWith('}}')) {
-    const key = str.slice(2, -2).trim()
-    if (key.startsWith('state.')) {
-      const varName = key.split('.')[1]
-      return variables[varName]
-    }
-  }
-  return str
-}
+import { ComponentMap, CONTAINER_TYPES } from '../materials/registry';
+import { resolveProps } from '../utils/expression';
+import { runActions } from '../utils/actionRunner';
 
 // 渲染组件的核心逻辑：根据组件类型和属性，渲染组件内容
 const InnerRenderComponent: React.FC<{ 
@@ -32,7 +20,8 @@ const InnerRenderComponent: React.FC<{
   const dispatch = useAppDispatch();
   const selectedId = useAppSelector(state => state.project.present.selectedId);
   const variables = useAppSelector(state => state.project.present.variables);
-  const isContainer = ['Container', 'Card', 'Form', 'FormItem', 'Space', 'Modal'].includes(schema.type);
+  const dataSources = useAppSelector(state => state.project.present.page.dataSources);
+  const isContainer = CONTAINER_TYPES.includes(schema.type);
   const hasChildren = schema.children && schema.children.length > 0;
   
   // Dnd-kit 拖拽相关逻辑
@@ -57,16 +46,11 @@ const InnerRenderComponent: React.FC<{
   
   const Component = ComponentMap[schema.type];
 
-  // 解析组件属性：将字符串表达式转换为实际值
-  const resolvedProps = React.useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newProps: Record<string, any> = {}
-    for (const key in schema.props) {
-      const value = schema.props[key]
-      newProps[key] = parseExpression(value, variables)
-    }
-    return newProps
-  }, [schema.props, variables])
+  // 解析组件属性：将表达式 {{state.x}} 转换为实际值（支持运算与成员访问）
+  const resolvedProps = React.useMemo(
+    () => resolveProps(schema.props, variables),
+    [schema.props, variables],
+  )
 
   const eventHandlers = React.useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,50 +60,12 @@ const InnerRenderComponent: React.FC<{
       for (const eventName in schema.events) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handlers[eventName] = (e: any) => {
-          schema.events?.[eventName].forEach(action => {
-            switch (action.type) {
-              case 'openModal':
-                alert(`模拟弹窗：${action.config.title}`)
-                break
-              case 'link':
-                window.open(action.config.url, action.config.target || '_blank')
-                break
-              case 'updateState': {
-                let val = action.config.value
-                if (val === undefined && e && e.target) {
-                  val = e.target.value
-                }
-                if (action.config.key) {
-                  dispatch(setVariable({ key: action.config.key, value: val }))
-                }
-                break
-              }
-              case 'setValue': {
-                if (action.config.targetId) {
-                  dispatch(updateComponentProps({
-                    id: action.config.targetId,
-                    props: { value: action.config.value }
-                  }))
-                }
-                break
-              }
-              case 'script':
-                executeScript(action.config.code, { 
-                  e, 
-                  dispatch, 
-                  setVariable, 
-                  variables 
-                })
-                break
-              default:
-                console.warn('未知的动作类型：', action.type)
-            }
-          })
+          runActions(schema.events?.[eventName], { e, variables, dispatch, dataSources })
         }
       }
     }
     return handlers
-  }, [schema.events, dispatch, variables])
+  }, [schema.events, dispatch, variables, dataSources])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalProps: any = {
@@ -127,6 +73,11 @@ const InnerRenderComponent: React.FC<{
     ...eventHandlers,
     style: schema.style
   }
+
+  // 真正透传给渲染组件的属性：包含解析后的表达式与事件处理器。
+  // onClick 交由外层 wrapper 的 handleClick 统一处理，这里剔除以避免重复触发。
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { onClick: _omitOnClick, ...renderProps } = finalProps
 
   // 遵循 React Hooks 规则：必须在所有 Hook 执行完毕后才能进行条件判断和提前返回
   if (!Component) {
@@ -236,7 +187,7 @@ const InnerRenderComponent: React.FC<{
     >
       {isContainer && !hasChildren ? (
         // 1.空容器
-        <Component style={schema.style} {...schema.props}>
+        <Component {...renderProps}>
           {/* 渲染一个大的虚线框占位符 */}
           <div 
             ref={setEmptyDropRef}
@@ -266,13 +217,13 @@ const InnerRenderComponent: React.FC<{
             position: 'relative'
           }}
         >
-          <Component style={schema.style} {...schema.props}>
+          <Component {...renderProps}>
             {children}
           </Component>
         </div>
       ) : (
         // 3.普通组件
-        <Component style={schema.style} {...schema.props}>
+        <Component {...renderProps}>
           {children || finalProps.children}
         </Component>
       )}

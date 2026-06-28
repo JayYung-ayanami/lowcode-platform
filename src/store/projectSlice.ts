@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { PageSchema, ComponentSchema, EventHandler } from '../types/schema'
+import type { CSSProperties } from 'react'
+import type { PageSchema, ComponentSchema, EventHandler, DataSourceConfig } from '../types/schema'
 import { initialPage } from '../mock'
 import { findNode } from '../utils/treeUtils'
 
@@ -82,12 +83,22 @@ export const projectSlice = createSlice({
                 node.props = { ...node.props, ...props }
             }
         },
+        updateComponentStyle: (state, action: PayloadAction<{ id: string; style: CSSProperties }>) => {
+            const { id, style } = action.payload
+            const node = findNode(state.page.root, id)
+            if (node) {
+                node.style = { ...node.style, ...style }
+            }
+        },
         updateComponentEvents: (state, action: PayloadAction<{ id: string; events: Record<string, EventHandler[]> }>) => {
             const { id, events } = action.payload
             const node = findNode(state.page.root, id)
             if (node) {
                 node.events = events
             }
+        },
+        setDataSources: (state, action: PayloadAction<DataSourceConfig[]>) => {
+            state.page.dataSources = action.payload
         },
         deleteComponent: (state, action: PayloadAction<string>) => {
             const id = action.payload
@@ -171,7 +182,9 @@ export const {
     setPageTitle, 
     setSelectedId, 
     updateComponentProps,
+    updateComponentStyle,
     updateComponentEvents,
+    setDataSources,
     addComponent, 
     deleteComponent, 
     reorderComponents,

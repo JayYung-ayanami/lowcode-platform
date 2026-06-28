@@ -26,12 +26,15 @@ import { SettingPanel } from './editor/panels/SettingPanel';
 // Utils
 import { findNode, findParentAndIndex } from './utils/treeUtils';
 import { generatePageCode } from './utils/codegen';
+import { getDefaultComponentData, materialMap } from './materials/registry';
 import { useMemo } from 'react';
 // Storage
 import { projectStorage } from './utils/storage';
 import { useAutoSave } from './hooks/useAutoSave';
+import { useDataSources } from './hooks/useDataSources';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PerformanceMonitor } from './components/PerformanceMonitor';
+import { DataSourceModal } from './editor/panels/DataSourceModal';
 
 // 辅助函数：根据 ID 回溯所有祖先 ID (包含自己)
 const getAncestors = (nodeMap: Record<string, { parentId: string | null }>, id: string | null): Set<string> => {
@@ -63,6 +66,7 @@ function App() {
   const [overId, setOverId] = useState<string | null>(null); 
   const [code, setCode] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false); 
+  const [isDataSourceOpen, setIsDataSourceOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showPerformance, setShowPerformance] = useState(true);
   const initialized = useRef(false);
@@ -84,6 +88,9 @@ function App() {
 
   // 开启自动保存
   useAutoSave();
+
+  // 页面加载时自动拉取远程数据源
+  useDataSources();
 
   // 键盘快捷键 (Undo/Redo)
   useEffect(() => {
@@ -129,10 +136,6 @@ function App() {
     const { over } = event;
     setOverId(over ? String(over.id) : null);
   };
-  
-        {/* 中间：画布 */}
-        {/* 将 involvedIds 传给 CanvasPanel */}
-        <CanvasPanel overId={overId} activeId={activeId} involvedIds={involvedIds} />
 
   // 拖拽结束：处理组件的创建、移动和排序的核心逻辑
   const handleDragEnd = (event: DragEndEvent) => {
@@ -146,74 +149,17 @@ function App() {
     // 场景1：从左侧物料区拖入新组件 (Add New Component)
     if (active.data.current?.type) {
         const type = active.data.current.type as ComponentType
-        
-        // 1.1 初始化新组件数据结构
+
+        // 1.1 初始化新组件数据结构（默认 props / style / 是否容器全部由物料注册表派生）
+        const meta = materialMap[type]
+        const { props, style } = getDefaultComponentData(type)
         const newComponent: ComponentSchema = {
             id: uuid(),
             type,
-            name: type,
-            props: {},
-            children: []
-        }
-        
-        // 根据不同类型设置默认 Props 和 Style
-        if (type === 'Button') {
-             newComponent.props = { children: '新按钮' }
-        } else if (type === 'Text') {
-             newComponent.props = { text: '默认文本', fontSize: '14px', color: '#000' }
-        } else if (type === 'Input') {
-             newComponent.props = { placeholder: '请输入...' }
-        } else if (type === 'Container') {
-             newComponent.props = {}
-             newComponent.style = { 
-                border: '1px solid #d9d9d9', 
-                padding: '20px', 
-                minHeight: '100px',
-                borderRadius: '4px',
-                backgroundColor: '#fff'
-             }
-        } else if (type === 'Table') {
-             newComponent.props = { 
-               columns: [
-                 { title: '姓名', dataIndex: 'name', key: 'name' },
-                 { title: '年龄', dataIndex: 'age', key: 'age' },
-                 { title: '职位', dataIndex: 'job', key: 'job' }
-               ],
-               dataSource: [
-                 { id: '1', name: '张三', age: 32, job: '前端开发' },
-                 { id: '2', name: '李四', age: 28, job: '产品经理' }
-               ]
-             }
-        } else if (type === 'Card') {
-             newComponent.props = { title: '卡片标题' }
-             newComponent.style = { width: '100%', marginBottom: '16px' }
-             newComponent.children = []
-        } else if (type === 'Select') {
-             newComponent.props = { 
-               placeholder: '请选择',
-               options: [
-                 { label: '选项1', value: '1' },
-                 { label: '选项2', value: '2' },
-                 { label: '选项3', value: '3' }
-               ]
-             }
-             newComponent.style = { width: '200px' }
-        } else if (type === 'Form') {
-             newComponent.props = { layout: 'vertical' }
-             newComponent.children = []
-        } else if (type === 'FormItem') {
-             newComponent.props = { label: '表单项', name: 'field' }
-             newComponent.children = []
-        } else if (type === 'Modal') {
-             newComponent.props = { title: '弹窗标题', visible: false }
-             newComponent.children = []
-        } else if (type === 'Divider') {
-             newComponent.props = { text: '分割线', orientation: 'center' }
-        } else if (type === 'Space') {
-             newComponent.props = { direction: 'horizontal', size: 'small' }
-             newComponent.children = []
-        } else if (type === 'Tag') {
-             newComponent.props = { text: '标签', color: 'blue' }
+            name: meta?.name || type,
+            props,
+            style,
+            ...(meta?.isContainer ? { children: [] } : {}),
         }
 
         // 1.2 确定插入位置
@@ -421,6 +367,9 @@ function App() {
           <Button onClick={() => dispatch(ActionCreators.redo())}>
             重做
           </Button>
+          <Button onClick={() => setIsDataSourceOpen(true)}>
+            数据源
+          </Button>
           <Button onClick={handleExportSchema}>
             导出 Schema
           </Button>
@@ -484,6 +433,9 @@ function App() {
           {code}
         </pre>
       </Modal>
+
+      {/* 数据源管理 */}
+      <DataSourceModal open={isDataSourceOpen} onClose={() => setIsDataSourceOpen(false)} />
 
       {/* 性能监控面板 */}
       <PerformanceMonitor visible={showPerformance} />

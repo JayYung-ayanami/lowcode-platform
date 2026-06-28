@@ -1,6 +1,7 @@
 import type { PageSchema, ComponentSchema } from '../types/schema'
 import * as t from '@babel/types'
 import generate from '@babel/generator'
+import { materialMap } from '../materials/registry'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const createJSXAttribute = (key: string, value: any): t.JSXAttribute => {
@@ -9,21 +10,15 @@ const createJSXAttribute = (key: string, value: any): t.JSXAttribute => {
   if (typeof value === 'string') {
     propValue = t.stringLiteral(value)
   } else if (typeof value === 'number') {
-    propValue = t.jsxExpressionContainer(
-      t.numericLiteral(value)
-    )
+    propValue = t.jsxExpressionContainer(t.numericLiteral(value))
   } else if (typeof value === 'boolean') {
-    propValue = t.jsxExpressionContainer(
-      t.booleanLiteral(value)
-    )
+    propValue = t.jsxExpressionContainer(t.booleanLiteral(value))
   } else if (value === null || value === undefined) {
     propValue = null
   } else {
-    // 兜底方案：尝试将值序列化后作为JS表达式
+    // 对象 / 数组：序列化为 JS 表达式（通过模板字面量承载，再由 generator 还原）
     try {
-      propValue = t.jsxExpressionContainer(
-        t.identifier(JSON.stringify(value))
-      )
+      propValue = t.jsxExpressionContainer(t.identifier(JSON.stringify(value)))
     } catch {
       console.warn(`无法处理的属性值类型: ${key}`, value)
     }
@@ -33,201 +28,124 @@ const createJSXAttribute = (key: string, value: any): t.JSXAttribute => {
 }
 
 const createJSXElement = (node: ComponentSchema): t.JSXElement => {
+  const meta = materialMap[node.type]
+  const tag = meta?.codegen.tag || node.type
+  const textProp = meta?.codegen.textProp
+
   const attributes: t.JSXAttribute[] = []
-  
+
   if (node.props) {
     Object.entries(node.props).forEach(([key, value]) => {
-      if (key !== 'children') {
-        attributes.push(createJSXAttribute(key, value))
-      }
+      // children 与「文本属性」交由 children 处理，不作为属性输出
+      if (key === 'children') return
+      if (textProp && key === textProp) return
+      attributes.push(createJSXAttribute(key, value))
     })
   }
 
   if (node.style && Object.keys(node.style).length > 0) {
     const styleProperties = Object.entries(node.style).map(([k, v]) =>
-      t.objectProperty(t.identifier(k), t.stringLiteral(String(v)))
+      t.objectProperty(t.identifier(k), t.stringLiteral(String(v))),
     )
     attributes.push(
-      t.jsxAttribute(
-        t.jsxIdentifier('style'),
-        t.jsxExpressionContainer(t.objectExpression(styleProperties))
-      )
+      t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(t.objectExpression(styleProperties))),
     )
   }
 
-  let childrenNodes: (t.JSXElement | t.JSXText | t.JSXExpressionContainer)[] = []
+  let childrenNodes: (t.JSXElement | t.JSXText)[] = []
   if (node.children && node.children.length > 0) {
-    // 情况 A: 有子组件
-    childrenNodes = node.children.map(child => createJSXElement(child))
+    childrenNodes = node.children.map((child) => createJSXElement(child))
+  } else if (textProp && node.props?.[textProp] !== undefined) {
+    childrenNodes = [t.jsxText(String(node.props[textProp]))]
   } else if (typeof node.props?.children === 'string') {
-    // 情况 B: props.children 是纯文本
     childrenNodes = [t.jsxText(node.props.children)]
   }
 
-  const openingElement = t.jsxOpeningElement(
-    t.jsxIdentifier(node.type), 
-    attributes,
-    childrenNodes.length === 0
-  )
-  
-  const closingElement = childrenNodes.length === 0 
-    ? null 
-    : t.jsxClosingElement(t.jsxIdentifier(node.type))
+  const selfClosing = childrenNodes.length === 0
+  const openingElement = t.jsxOpeningElement(t.jsxIdentifier(tag), attributes, selfClosing)
+  const closingElement = selfClosing ? null : t.jsxClosingElement(t.jsxIdentifier(tag))
 
-  return t.jsxElement(openingElement, closingElement, childrenNodes, childrenNodes.length === 0)
+  return t.jsxElement(openingElement, closingElement, childrenNodes, selfClosing)
 }
 
 // 递归收集所有使用到的组件类型
-const collectImports = (node: ComponentSchema, imports: Set<string>) => {
-  imports.add(node.type);
+const collectTypes = (node: ComponentSchema, types: Set<string>) => {
+  types.add(node.type)
   if (node.children) {
-    node.children.forEach(child => collectImports(child, imports));
+    node.children.forEach((child) => collectTypes(child, types))
   }
 }
 
-// 生成辅助组件定义 AST
-const generateHelperComponents = (usedTypes: Set<string>): t.Statement[] => {
-  const helpers: t.Statement[] = []
-
-  // const Container = ({children, style, ...props}) => <div style={style} {...props}>{children}</div>
-  if (usedTypes.has('Container')) {
-    // 简化版：const Container = (props) => <div {...props} />
-    // 为了兼容 style 和 children，直接透传 props 即可，react 会处理 children
-    const containerAst = t.variableDeclaration('const', [
-      t.variableDeclarator(
-        t.identifier('Container'),
-        t.arrowFunctionExpression(
-            [t.identifier('props')],
-            t.jsxElement(
-                t.jsxOpeningElement(
-                    t.jsxIdentifier('div'), 
-                    [t.jsxSpreadAttribute(t.identifier('props'))],
-                    false
-                ),
-                t.jsxClosingElement(t.jsxIdentifier('div')),
-                [t.jsxExpressionContainer(t.memberExpression(t.identifier('props'), t.identifier('children')))]
-            )
-        )
-      )
-    ])
-    helpers.push(containerAst)
-  }
-
-  // const Text = ({text, style, ...props}) => <span style={style} {...props}>{text}</span>
-  if (usedTypes.has('Text')) {
-    const textAst = t.variableDeclaration('const', [
-        t.variableDeclarator(
-          t.identifier('Text'),
-          t.arrowFunctionExpression(
-              [
-                t.objectPattern([
-                  t.objectProperty(t.identifier('text'), t.identifier('text'), false, true),
-                  t.restElement(t.identifier('props'))
-                ])
-              ],
-              t.jsxElement(
-                  t.jsxOpeningElement(
-                      t.jsxIdentifier('span'), 
-                      [t.jsxSpreadAttribute(t.identifier('props'))],
-                      false
-                  ),
-                  t.jsxClosingElement(t.jsxIdentifier('span')),
-                  [t.jsxExpressionContainer(t.identifier('text'))]
-              )
-          )
-        )
-      ])
-      helpers.push(textAst)
-  }
-
-  // const FormItem = Form.Item;
-  if (usedTypes.has('FormItem')) {
-    const formItemAst = t.variableDeclaration('const', [
-        t.variableDeclarator(
-            t.identifier('FormItem'),
-            t.memberExpression(t.identifier('Form'), t.identifier('Item'))
-        )
-    ])
-    helpers.push(formItemAst)
-  }
-
-  return helpers
-}
-
+/**
+ * 将页面 Schema 编译为 React + Antd 源代码。
+ *
+ * 流程：依赖收集 → 按物料注册表区分 antd 导入 / helper 定义 → AST 生成主组件 → 拼装源码。
+ * 导入清单、helper 定义、标签名、文本子节点策略全部由注册表（materialMap）驱动。
+ */
 export const generatePageCode = (page: PageSchema): string => {
   // 1. 依赖收集
   const usedTypes = new Set<string>()
-  collectImports(page.root, usedTypes)
+  collectTypes(page.root, usedTypes)
 
-  // 2. 过滤 Antd 组件
-  const ANTD_COMPONENTS = ['Button', 'Input', 'Table', 'Card', 'Select', 'Form', 'Modal', 'Divider', 'Space', 'Tag']
-  const antdImports = Array.from(usedTypes).filter(type => ANTD_COMPONENTS.includes(type))
-  
-  // 特殊处理：如果用了 FormItem，必须导入 Form
-  if (usedTypes.has('FormItem') && !antdImports.includes('Form')) {
-    antdImports.push('Form')
-  }
+  // 2. 按注册表区分 antd 导入与 helper 定义
+  const antdImports = new Set<string>()
+  const helperCodes: string[] = []
+  const seenHelper = new Set<string>()
 
-  // 3. 构建 AST
-  const programBody: t.Statement[] = [
-      t.importDeclaration(
-        [t.importDefaultSpecifier(t.identifier('React'))],
-        t.stringLiteral('react')
-      )
-  ]
+  usedTypes.forEach((type) => {
+    const meta = materialMap[type]
+    if (!meta) return
+    const cg = meta.codegen
+    if (cg.source === 'antd') {
+      antdImports.add(cg.tag || type)
+    } else if (cg.source === 'helper') {
+      cg.helperAntdDeps?.forEach((dep) => antdImports.add(dep))
+      if (cg.helperCode && !seenHelper.has(type)) {
+        seenHelper.add(type)
+        helperCodes.push(cg.helperCode)
+      }
+    }
+  })
 
-  // 添加 Antd Imports
-  if (antdImports.length > 0) {
-      programBody.push(
-        t.importDeclaration(
-            antdImports.map(name => t.importSpecifier(t.identifier(name), t.identifier(name))),
-            t.stringLiteral('antd')
-        )
-      )
-  }
-
-  // 添加 Helper Components 定义
-  const helperComponents = generateHelperComponents(usedTypes)
-  programBody.push(...helperComponents)
-
-  // 添加主组件
-  programBody.push(
-    t.exportDefaultDeclaration(
-        t.functionDeclaration(
-          t.identifier('GeneratedPage'),
-          [],
-          t.blockStatement([
-            t.returnStatement(
+  // 3. 生成主组件 AST
+  const mainFn = t.exportDefaultDeclaration(
+    t.functionDeclaration(
+      t.identifier('GeneratedPage'),
+      [],
+      t.blockStatement([
+        t.returnStatement(
+          t.jsxElement(
+            t.jsxOpeningElement(t.jsxIdentifier('div'), [
+              t.jsxAttribute(t.jsxIdentifier('className'), t.stringLiteral('page-container')),
+            ]),
+            t.jsxClosingElement(t.jsxIdentifier('div')),
+            [
               t.jsxElement(
-                t.jsxOpeningElement(
-                  t.jsxIdentifier('div'),
-                  [t.jsxAttribute(t.jsxIdentifier('className'), t.stringLiteral('page-container'))]
-                ),
-                t.jsxClosingElement(t.jsxIdentifier('div')),
-                [
-                  // 标题 H1
-                  t.jsxElement(
-                    t.jsxOpeningElement(t.jsxIdentifier('h1'), []),
-                    t.jsxClosingElement(t.jsxIdentifier('h1')),
-                    [t.jsxText(page.title)]
-                  ),
-                  // 递归生成的组件树
-                  createJSXElement(page.root)
-                ]
-              )
-            )
-          ])
-        )
-      )
+                t.jsxOpeningElement(t.jsxIdentifier('h1'), []),
+                t.jsxClosingElement(t.jsxIdentifier('h1')),
+                [t.jsxText(page.title)],
+              ),
+              createJSXElement(page.root),
+            ],
+          ),
+        ),
+      ]),
+    ),
   )
 
-  const ast = t.file(t.program(programBody))
-
-  const output = generate(ast, { 
+  const mainCode = generate(t.file(t.program([mainFn])), {
     jsescOption: { minimal: true },
     retainLines: false,
     compact: false,
-  })
+  }).code
 
-  return output.code
+  // 4. 拼装：import → helper 定义 → 主组件
+  const importLines = ['import React from "react";']
+  if (antdImports.size > 0) {
+    importLines.push(`import { ${Array.from(antdImports).sort().join(', ')} } from "antd";`)
+  }
+
+  return [importLines.join('\n'), helperCodes.join('\n\n'), mainCode]
+    .filter(Boolean)
+    .join('\n\n')
 }
